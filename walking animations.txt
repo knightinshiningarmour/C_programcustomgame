@@ -1,0 +1,17 @@
+idling animations: 4
+srcx = 200, 565, 950, 1330
+srcy = 190, 190, 190, 190
+idle width = 300
+idle height = 550
+
+running animations: 6
+srcx = 200, 750, 1310, 1875, 2400, 2925 
+srcy = 810, 820, 820, 820, 820, 820
+running width = 500
+running height = 500
+
+jumping animations: 9
+srcx = 230, 610, 1070, 1550, 2050, 2450, 2950, 3375, 230
+width = 350, 395, 415, 450, 330, 450, 425, 475, 350
+srcy = 1610, 1400, 1400, 1400, 1425, 1425, 1400, 1400, 1610
+height = 500, 585, 450, 325, 460, 350, 450, 500, 500

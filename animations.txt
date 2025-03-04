@@ -1,0 +1,7 @@
+walking right animations:
+srcx = 200, 550, 900, 1250
+srcy = 150, 150, 150, 150
+
+walking left animations:
+srcx = 200, 550, 900, 1250
+srcy = 150, 150, 150, 150

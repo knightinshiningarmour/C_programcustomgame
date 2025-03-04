@@ -1,0 +1,33 @@
+idle animations: 4
+srcx = 21, 121, 221, 321
+srcy = 0, 0, 0, 0
+width = 50
+
+walking animations: 7
+srcx = 18, 120, 214, 314, 414, 511, 612
+width = 48, 48, 56, 51, 55, 57, 53
+srcy = 0, 2, 3, 0, 1, 3, 2
+
+falling animations: 3
+srcx = 17, 116, 216
+srcy = 5, 5, 3
+width = 50 
+height = 57
+
+jumping animations: 6
+srcx = 25, 125, 225, 325, 416, 516
+width = 50, 50, 50, 50, 53, 50
+srcy = 5, 1, 1, 1, 1, 0
+height = 59, 62, 62, 62, 60, 63
+
+attacking animations: 6
+srcx = 17, 106, 213, 323, 438, 526
+srcy = 4, 4, 4, 2, 5, 3
+width = 53, 64, 87, 77, 62, 50
+height = textureheight - srcy
+
+shield animations: 7
+srcx = 11, 111, 211, 315, 416, 513, 618
+srcy = 3, 3, 6, 8, 8, 8, 8
+width = 56, 60, 63, 58, 54, 58, 53
+height = textureheight - srcy

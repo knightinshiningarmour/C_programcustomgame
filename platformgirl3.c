@@ -107,19 +107,33 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
         case MENU:
             Vector2 mousePos = GetMousePosition();
             Rectangle playButtonsrc = {97, 1, 46, 14};
+            Rectangle optionButtonsrc = {193, 1, 46, 14};
+            Rectangle exitButtonsrc = {481, 1, 46, 14};
             Rectangle playButtondest = {windwidth/2 - 200, 300, 400, 100};
             Rectangle optionsButtondest = {windwidth/2 - 200, 450, 400, 100};
             Rectangle exitButtondest = {windwidth/2 - 200, 600, 400, 100};
+            
+            static float backgroundOffset = 0;
+            backgroundOffset -= 0.5f; // Adjust speed
+            if (backgroundOffset <= -assets->texture[10].width) backgroundOffset = 0;
+            DrawTexture(assets->texture[10], backgroundOffset, 0, WHITE);
+            DrawTexture(assets->texture[10], backgroundOffset + assets->texture[10].width, 0, WHITE);
 
             if (CheckCollisionPointRec(mousePos, playButtondest)) {
-                playButtonsrc.x = 145;
+                playButtonsrc.x += 48;
+                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                    *currentGameState = PLAYING;
+                }
+            }
+            else if (CheckCollisionPointRec(mousePos, optionsButtondest)) {
+                optionButtonsrc.x += 48;
+            }
+            else if (CheckCollisionPointRec(mousePos, exitButtondest)) {
+                exitButtonsrc.x += 48;
             }
             DrawTexturePro(assets->texture[19], playButtonsrc, playButtondest, (Vector2){0, 0}, 0, WHITE);
-            
-            if (IsKeyPressed(KEY_ENTER))
-            {
-                *currentGameState = PLAYING;
-            }
+            DrawTexturePro(assets->texture[19], optionButtonsrc, optionsButtondest, (Vector2){0, 0}, 0, WHITE);
+            DrawTexturePro(assets->texture[19], exitButtonsrc, exitButtondest, (Vector2){0, 0}, 0, WHITE);
             break;
 
         case PLAYING:

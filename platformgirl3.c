@@ -112,12 +112,6 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
             Rectangle playButtondest = {windwidth/2 - 200, 300, 400, 100};
             Rectangle optionsButtondest = {windwidth/2 - 200, 450, 400, 100};
             Rectangle exitButtondest = {windwidth/2 - 200, 600, 400, 100};
-            
-            static float backgroundOffset = 0;
-            backgroundOffset -= 0.5f; // Adjust speed
-            if (backgroundOffset <= -assets->texture[10].width) backgroundOffset = 0;
-            DrawTexture(assets->texture[10], backgroundOffset, 0, WHITE);
-            DrawTexture(assets->texture[10], backgroundOffset + assets->texture[10].width, 0, WHITE);
 
             if (CheckCollisionPointRec(mousePos, playButtondest)) {
                 playButtonsrc.x += 48;
@@ -134,6 +128,17 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
             DrawTexturePro(assets->texture[19], playButtonsrc, playButtondest, (Vector2){0, 0}, 0, WHITE);
             DrawTexturePro(assets->texture[19], optionButtonsrc, optionsButtondest, (Vector2){0, 0}, 0, WHITE);
             DrawTexturePro(assets->texture[19], exitButtonsrc, exitButtondest, (Vector2){0, 0}, 0, WHITE);
+            
+            static int currentframe = 0;
+            static int animationindex = 0;
+            static int facedirection = 1;
+            Playerdata->animationstate = 0; 
+            Playerdata->Position.x = windwidth/2 - Playerdata->width/2;
+            Playerdata->Position.y = 300 - Playerdata->height; 
+            Playerdata->width *= 3;
+            Playerdata->height *= 3;  
+            iterateanimationplayer(assets, Playerdata, &currentframe, &facedirection, &animationindex);
+            
             break;
 
         case PLAYING:
@@ -612,8 +617,6 @@ void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player
     if (player->animationstate == 0) {  // Idle Animation
         texture = assets->texture[1];
         sourceRect = (Rectangle){assets->src_idlex[*i], assets->src_idley[*i], 50, 61};
-        player->width = 100;
-        player->height = 100;
     } 
     
     else if (player->animationstate == 1) // Running Animation
@@ -621,24 +624,18 @@ void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player
         texture = assets->texture[0];
         sourceRect = (Rectangle){assets->src_runningx[*i], assets->src_runningy[*i], assets->src_runningwidth[*i],
                                  assets->texture[0].height - assets->src_runningy[*i]};
-        player->width = 100;
-        player->height = 100;
     } 
 
     else if (player->animationstate == 2) // Jumping Animation
     {  
         texture = assets->texture[3];
         sourceRect = (Rectangle){assets->src_jumpingx[*i], assets->src_jumpingy[*i], assets->src_jumpingwidth[*i], assets->src_jumpingheight[*i]};
-        player->width = 100;
-        player->height = 100;
     }
 
     else if (player->animationstate == 3) // falling Animation
     {
         texture = assets->texture[2];
         sourceRect = (Rectangle){assets->src_fallingx[*i], assets->src_fallingy[*i], 50, 57};
-        player->width = 100;
-        player->height = 100;
     }
 
     else if (player->animationstate == 4){
@@ -646,8 +643,6 @@ void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player
         texture = assets->texture[4];
         sourceRect = (Rectangle){assets->src_attackingx[*i], assets->src_attackingy[*i], 
                       assets->src_attackingwidth[*i], assets->texture[4].height - assets->src_attackingy[*i]};
-        player->width = 100;
-        player->height = 100;
     
         //printf("Attack Animation Frame: %d, Attack Flag: %d\n", *i, player->attack); // Debugging print
         if (*i == 5){
@@ -661,10 +656,9 @@ void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player
         texture = assets->texture[5];
         sourceRect = (Rectangle){assets->src_shieldx[*i], assets->src_shieldy[*i], assets->src_shieldwidth[*i], 
                                  assets->texture[5].height - assets->src_shieldy[*i]};
-        player->width = 100;
-        player->height = 100;
     }
-
+    player->width = 100;
+    player->height = 100;
     destRect = (Rectangle){player->Position.x, player->Position.y, player->width, player->height};
 
     if (*facedirection < 0) {

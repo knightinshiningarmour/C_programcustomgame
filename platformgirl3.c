@@ -2,8 +2,11 @@
 #include <raylib.h>
 #include <stdlib.h>
 #include <raymath.h>
+#include <math.h>
 #include <string.h>
 #include <time.h>
+
+#define MAX_ENEMIES 3
 
 const int windwidth = 1200;
 const int windheight = 800;
@@ -64,12 +67,104 @@ struct Playerinfo
     bool attack;
     bool dead;
     int animationstate;
+    int currentframe;
+    int animationindex;
+    float animationtimer;
+    int count;
+    int hitpoints;
+    int currenthp;
+    int facedirection;
+    float deadtimer;
 };
 
+typedef enum 
+{
+    MENU,
+    PLAYING,
+    PAUSE,
+    GAMEOVER,
+} Gamestate;
+
 struct Playerinfo *blocksarray = NULL;
+struct Playerinfo enemies[MAX_ENEMIES];
 
-// Initialise all the background assets
+//function prototypes
+void drawbackground(struct GameAssets* assets);
+void drawobstacles(int* maxplatform, struct GameAssets* assets);
+int calculatemovementplayer(struct Playerinfo* player, int* maxplatform, struct GameAssets* assets);
+void updatecamera(Camera2D* camera, struct Playerinfo* player);
+void keepobjectwithinscreen(struct Playerinfo* object);
+void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player, int* currentframecount, int* facedirection, int* i);
+void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enemyonblock[MAX_ENEMIES], int enemyIndex);
+void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets);
+void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], int facedirection);
+void removeDeadEnemies(struct Playerinfo enemies[MAX_ENEMIES], int* enemyCount);
 
+void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
+                        int* playerlastframedirection, int* playercurrentframe, int* playeranimationindex, int enemyonblock[MAX_ENEMIES], 
+                        struct Playerinfo enemies[MAX_ENEMIES], int* enemycount){
+    switch (*currentGameState){
+        case MENU:
+            Vector2 mousePos = GetMousePosition();
+            Rectangle playButtonsrc = {97, 1, 46, 14};
+            Rectangle playButtondest = {windwidth/2 - 200, 300, 400, 100};
+            Rectangle optionsButtondest = {windwidth/2 - 200, 450, 400, 100};
+            Rectangle exitButtondest = {windwidth/2 - 200, 600, 400, 100};
+
+            if (CheckCollisionPointRec(mousePos, playButtondest)) {
+                playButtonsrc.x = 145;
+            }
+            DrawTexturePro(assets->texture[19], playButtonsrc, playButtondest, (Vector2){0, 0}, 0, WHITE);
+            
+            if (IsKeyPressed(KEY_ENTER))
+            {
+                *currentGameState = PLAYING;
+            }
+            break;
+
+        case PLAYING:
+            BeginMode2D(*camera);
+            drawbackground(assets);
+            drawobstacles(blockcount, assets);
+            *playerlastframedirection = calculatemovementplayer(Playerdata, blockcount, assets);
+            updatecamera(camera, Playerdata);
+            keepobjectwithinscreen(Playerdata);
+            iterateanimationplayer(assets, Playerdata, playercurrentframe, playerlastframedirection, playeranimationindex);
+
+            for (int i = 0; i < MAX_ENEMIES; i++) {
+                enemymovement(&enemies[i], Playerdata, enemyonblock, i);
+                enemyanimations(&enemies[i], assets);
+            }
+            checkPlayerAttackCollision(Playerdata, enemies, *playerlastframedirection);
+            removeDeadEnemies(enemies, enemycount);
+            EndMode2D();
+
+            // Pause the game
+            if (IsKeyPressed(KEY_P))
+            {
+            *currentGameState = PAUSE;
+            }
+            break;
+
+        case PAUSE:
+            // Draw paused screen
+            DrawText("Game Paused. Press P to Resume", windwidth / 2 - 150, windheight / 2, 20, BLACK);
+            if (IsKeyPressed(KEY_P))
+            {
+                *currentGameState = PLAYING;
+            }
+            break;
+
+        case GAMEOVER:
+            // Draw game over screen
+            DrawText("Game Over. Press ENTER to Restart", windwidth / 2 - 150, windheight / 2, 20, BLACK);
+            if (IsKeyPressed(KEY_ENTER))
+            {
+                *currentGameState = MENU;
+            }
+            break;
+            }
+}
 
 void drawtrees(struct GameAssets* assets, int i, int destx, int desty, int scalefactor){
     if (i == 1){    // big tree in background.png
@@ -144,19 +239,19 @@ void updatecamera(Camera2D* camera, struct Playerinfo* player){
         camera->offset =  (Vector2){250, windheight - 150};
         //points to the centre point of the first half frame
         camera->target = (Vector2){(windwidth/2-player->width)/2, player->Position.y + player->height / 2};
-        printf("camera target1: %.2f\n", camera->target.y);
+        //printf("camera target1: %.2f\n", camera->target.y);
     }
 
     else if (player->Position.x + player->width/2 >= windwidth/2 - 100 && player->Position.x + player->width/2 <= 5*windwidth/2 - 100){
         camera->offset = (Vector2){(windwidth-player->width)/2 - 50, windheight-150};
         camera->target = (Vector2){player->Position.x + player->width / 2, player->Position.y + player->height / 2};
-        printf("camera target2: %.2f\n", camera->target.x);
+        //printf("camera target2: %.2f\n", camera->target.x);
     }
 
         else if (player->Position.x + player->width/2 >= 5*windwidth/2 - 100) {
         camera->offset = (Vector2){(windwidth-player->width)/2 + 100, windheight-150};
         camera->target = (Vector2){5*windwidth/2 + 100 - player->width/2, player->Position.y + player->height / 2};
-        printf("camera target3: %.2f, %.2f\n", camera->target.x, camera->target.y);
+        //printf("camera target3: %.2f, %.2f\n", camera->target.x, camera->target.y);
     }
 
     ///////p.s. there is an issue when the character jumps from 2850 area to the fixed camera area and the y axis stuck
@@ -702,34 +797,44 @@ void keepobjectwithinscreen(struct Playerinfo* object){
     }
 }
 
-void loadenemyanimations(struct Playerinfo* enemy){
 
-}
-
-void randomenemypos(int* maxplatform, int enemyonblock[5]){
-    for (int i = 0; i < 5; i++) 
-    {
+void randomenemypos(int* maxplatform, int enemyonblock[MAX_ENEMIES]){
+    for (int i = 0; i < MAX_ENEMIES; i++) {
         int randomnum;
         int duplicate;
-        do 
-        {
+        do {
             duplicate = 0;
             randomnum = GetRandomValue(0, *maxplatform - 1);
-            for (int j = 0; j < i; j++) 
-            {
-                if (enemyonblock[j] == randomnum) 
-                {
+            for (int j = 0; j < i; j++) {
+                if (abs(enemyonblock[j] - randomnum) < 2) { // Ensure at least 2 tiles away
                     duplicate = 1; // Mark as duplicate
-                    break; //break out of the for loop back to do-while loop again
+                    break; // Break out of the for loop back to do-while loop again
                 }
             }
-        }while (duplicate); // Repeat if duplicate is found
-    
-        enemyonblock[i] = randomnum; //save the number
+        } while (duplicate); // Repeat if duplicate is found
+
+        enemyonblock[i] = randomnum; // Save the number
     }
 }
 
-void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets, int* enemycurrentframe, int* facedirection, int* j, float* animationtimer){
+void initializeEnemy(struct Playerinfo* enemy, struct Playerinfo* block, int index, Texture2D texture) {
+    *enemy = (struct Playerinfo){
+        .Position = {block->rect.x + 10 + index * 20, block->rect.y - ((texture.height / 2) - 45) * 0.15},
+        .width = 100,
+        .height = 100,
+        .attack = false,
+        .dead = false,
+        .isrunning = true,
+        .currentframe = 0,
+        .animationindex = 0,
+        .animationtimer = 0.0f,
+        .facedirection = -1,
+        .hitpoints = 75,
+        .deadtimer = 0.0f
+    };
+}
+
+void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets){
     int framecount = 0;
     int frametimer = 0;
     float dt = GetFrameTime();
@@ -745,56 +850,75 @@ void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets, int* e
         framecount = 5;
         frametimer = 10;
     }
-    (*enemycurrentframe)++;
+    enemy->currentframe++;
 
-    if (enemy->animationstate == 2 && *j == 0) { //delay the attack animations, takes time to recharge
-        *animationtimer += dt;
-        if (*animationtimer < 3.0f) {
-            *j = 0;
+    if (enemy->animationstate == 2 && enemy->animationindex == 0) { //delay the attack animations, takes time to recharge
+        enemy->animationtimer += dt;
+        if (enemy->animationtimer < 3.0f) {
+            enemy->animationindex = 0;
         } else {
-            *animationtimer = 0.0f;  // Reset timer after delay
-            (*j)++;  
+            enemy->animationtimer = 0.0f;  // Reset timer after delay
+            enemy->animationindex++;  
         }
-    } else if (*enemycurrentframe % frametimer == 1){
-        (*j)++;
-        (*enemycurrentframe) = 2;}
+    } else if (enemy->animationstate == 3 && enemy->animationindex == 5){
+        enemy->animationindex = 5;
+        enemy->deadtimer += dt; // Increment dead timer
+        printf("Enemy dead animation index: %d, deadtimer: %.2f\n", enemy->animationindex, enemy->deadtimer); // Debug print
+        if (enemy->deadtimer >= 2.0f) {
+            enemy->dead = true; // Mark the enemy as dead after 2 seconds
+            printf("Enemy marked as dead\n"); // Debug print
+            return;
+        }
+    }
+    
+    else if (enemy->currentframe % frametimer == 1){
+        enemy->animationindex++;
+        enemy->currentframe = 2;
+    }
 
-    if ((*j) > framecount){
-        (*j) = 0;}
+    if (enemy->animationindex > framecount){
+        if (enemy->dead == true){
+
+        }
+        else {
+        enemy->animationindex = 0;
+        }
+    }
 
     Rectangle sourceRect, destRect;
     if (enemy->animationstate == 1)
     {
         texture = assets->texture[16];
-        int frameIndex = (*j) % 5;  // 0-4 for first row, 0-4 again for second row
-        int rowIndex = ((*j) < 5) ? 0 : 1; // First 5 use row 0, next 5 use row 1
+        int frameIndex = enemy->animationindex % 5;  // 0-4 for first row, 0-4 again for second row
+        int rowIndex = (enemy->animationindex < 5) ? 0 : 1; // First 5 use row 0, next 5 use row 1
         float frameWidth = texture.width / 5;
 
-        sourceRect = (Rectangle){(frameWidth * (frameIndex))+10, rowIndex * (assets->texture[16].height / 2), 
+        sourceRect = (Rectangle){(frameWidth * (frameIndex)) + 10, rowIndex * (assets->texture[16].height / 2), 
                                 frameWidth, assets->texture[16].height / 2 - 45};
 
         destRect = (Rectangle){enemy->Position.x, enemy->Position.y + 10, 105, 140}; 
     } else if (enemy->animationstate == 2)
     {
         texture = assets->texture[15];
-        int frameIndex = (*j) % 5;  // 0-4 for first row, 0-4 again for second row
-        int rowIndex = ((*j) < 5) ? 0 : 1; // First 5 use row 0, next 5 use row 1
+        int frameIndex = enemy->animationindex % 5;  // 0-4 for first row, 0-4 again for second row
+        int rowIndex = (enemy->animationindex < 5) ? 0 : 1; // First 5 use row 0, next 5 use row 1
         float frameWidth = texture.width / 5;
 
-        sourceRect = (Rectangle){(frameWidth * (frameIndex))+10, rowIndex * (assets->texture[15].height / 2), 
+        sourceRect = (Rectangle){(frameWidth * (frameIndex)) + 10, rowIndex * (assets->texture[15].height / 2), 
                                 frameWidth, assets->texture[15].height / 2 - 45};
 
         destRect = (Rectangle){enemy->Position.x, enemy->Position.y + 10, 105, 140};
     } else if (enemy->animationstate == 3){
         texture = assets->texture[17];
-        int frameIndex = (*j) % 5;
-        float frameWidth = texture.width/5;
+        int frameIndex = enemy->animationindex % 5;
+        int rowIndex = (enemy->animationindex < 5) ? 0 : 1;
+        float frameWidth = texture.width / 5;
 
-        sourceRect = (Rectangle){(frameWidth * (frameIndex)), 0, frameWidth, 1010};
+        sourceRect = (Rectangle){(frameWidth * (frameIndex)), rowIndex * (assets->texture[15].height / 2), frameWidth, 1010};
         destRect = (Rectangle){enemy->Position.x, enemy->Position.y + 10, 105, 140};
     }
 
-    if (*facedirection > 0) {
+    if (enemy->facedirection > 0) {
         sourceRect.x += sourceRect.width;
         sourceRect.width = -fabs(sourceRect.width);
         destRect.width = fabs(destRect.width);
@@ -802,45 +926,117 @@ void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets, int* e
 
     Vector2 origin = {0, 0};
     DrawTexturePro(texture, sourceRect, destRect, origin, 0, WHITE);
-    printf("Animation State: %d, Frame: %d\n", enemy->animationstate, *j);
-    printf("%.2f, %.2f\n", destRect.width, destRect.height);
+    //printf("Animation State: %d, Frame: %d\n", enemy->animationstate, enemy->animationindex);
+    //printf("%.2f, %.2f\n", destRect.width, destRect.height);
 }
 
+void removeDeadEnemies(struct Playerinfo enemies[MAX_ENEMIES], int* enemyCount) {
+    for (int i = 0; i < *enemyCount; i++) {
+        if (enemies[i].dead && enemies[i].deadtimer >= 5.0f) {
+            (*enemyCount)--;
+            i--; // Check the current index again as it now contains the next enemy
+        }
+    }
+}
 
 //have to randomise their positions on blovksarray
-void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enemyonblock[5], int* facedirection){
+void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enemyonblock[MAX_ENEMIES], int enemyIndex){
     float dt = GetFrameTime();
     float speed = 50.0f;
 
-    if (fabs(enemy->Position.x - player->Position.x) <= 250 && !enemy->dead){
-        enemy->animationstate = 2; // Attack animation
-        enemy->attack = true;
-        speed = 0;
+    if (fabs(enemy->Position.x - player->Position.x) <= 150 && !enemy->dead){
+        if (enemy->Position.y - player->Position.y <= 100 && enemy->Position.y - player->Position.y >= -100){
+            enemy->animationstate = 2; // Attack animation
+            enemy->attack = true;
+            speed = 0;
+
+            if (enemy->Position.x < player->Position.x){ //if enemy is on the left of player, turn right
+                enemy->facedirection = 1;
+            } else {
+                enemy->facedirection = -1;
+            }
+
+        } else {
+            enemy->animationstate = 1; // Walking animation
+            enemy->attack = false;
+        }
+
     } else {
         enemy->animationstate = 1; // Walking animation
         enemy->attack = false;
     }
 
     if (!enemy->attack && !enemy->dead){
-        if (enemy->Position.x + enemy->width/2 <= blocksarray[enemyonblock[0]].rect.x - 20){
-            *facedirection = 1;
+        if (enemy->Position.x + enemy->width/2 <= blocksarray[enemyonblock[enemyIndex]].rect.x + 10){
+            enemy->facedirection = 1;
         }
-        else if (enemy->Position.x + enemy->width/2 >= blocksarray[enemyonblock[0]].rect.x + blocksarray[enemyonblock[0]].rect.width - 60){
-            *facedirection = -1;
+        else if (enemy->Position.x + enemy->width/2 >= blocksarray[enemyonblock[enemyIndex]].rect.x + blocksarray[enemyonblock[enemyIndex]].rect.width){
+            enemy->facedirection = -1;
         }
     }
 
     if (enemy->dead){
+        if (enemy->animationindex > 5){
+            enemy->animationindex = 0;
+        }
         enemy->animationstate = 3;
         speed = 0;
     }
-    printf("%d", *facedirection);
-    enemy->Position.x += dt * speed * (*facedirection);
+
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        if (enemy != &enemies[i] && !enemies[i].dead) {
+            if (CheckCollisionRecs((Rectangle){enemy->Position.x+5, enemy->Position.y, enemy->width - 10, enemy->height},
+                                   (Rectangle){enemies[i].Position.x, enemies[i].Position.y, enemies[i].width, enemies[i].height})) {
+                speed = 0;
+            }
+        }
+    }
+
+    //printf("%d", enemy->facedirection);
+    enemy->Position.x += dt * speed * (enemy->facedirection);
+}
+
+void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], int facedirection) {
+    Rectangle playerattackHitbox = {};
+    
+    if (!player->attack) {
+        return; // No need to check for collisions if the player is not attacking
+    }
+
+    if (facedirection > 0){
+        playerattackHitbox.x = player->Position.x + player->width;
+        playerattackHitbox.y = player->Position.y;
+        playerattackHitbox.width = player->width;
+        playerattackHitbox.width = player->height;
+    }
+    else {
+        playerattackHitbox.x = player->Position.x - player->width;
+        playerattackHitbox.y = player->Position.y;
+        playerattackHitbox.width = player->width;
+        playerattackHitbox.width = player->height;
+    }
+
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        if (!enemies[i].dead && CheckCollisionRecs(playerattackHitbox, (Rectangle){enemies[i].Position.x, enemies[i].Position.y, enemies[i].width, enemies[i].height})) {
+            if (player->attack){
+                enemies[i].hitpoints -= 1;
+                printf("Enemy %d hit!\n", i);
+                printf("hitpoints left: %d", enemies[i].hitpoints);
+                if (enemies[i].hitpoints <= 0) {
+                    enemies[i].dead = true; // Mark the enemy as dead
+                    printf("Enemy %d dead!\n", i);
+                }
+
+                else{
+                    return;
+                }
+            }
+        }
+    }
 }
 
 int main()
 {
-
     InitWindow(windwidth, windheight, "Gravity game");
     InitAudioDevice();
 
@@ -865,6 +1061,8 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("enemies/arrowskelwalk.png"); //17
     assets.images[assets.imagecount++] = LoadImage("enemies/arrowskeldead.png");
     assets.images[assets.imagecount++] = LoadImage("enemies/arrow.png"); //19
+    assets.images[assets.imagecount++] = LoadImage("Images/MenuSprites.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/HPSprites.png");
     //assets.images[assets.imagecount++] = LoadImage("Landing_KG_2.gif");
 
     assets.music[assets.musiccount++] = LoadMusicStream("Music/13 Always With Me_ Spirited Away (Pi.mp3");
@@ -894,41 +1092,8 @@ int main()
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[17]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[18]); //17
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[19]);
-
-    Texture2D mytexture = assets.texture[0]; //walking
-    if (mytexture.id == 0) {
-        printf("Error: Texture failed to load!\n");
-    }
-
-    Texture2D mytexture2 = assets.texture[1]; //idle
-    if (mytexture2.id == 0) {
-        printf("Error: Texture failed to load!\n");
-    }
-
-    Texture2D mytexture3 = assets.texture[2]; //falling
-    if (mytexture2.id == 0) {
-        printf("Error: Texture failed to load!\n");
-    }
-
-    Texture2D mytexture4 = assets.texture[3]; //jumping
-    if (mytexture2.id == 0) {
-        printf("Error: Texture failed to load!\n");
-    }
-
-    Texture2D mytexture5 = assets.texture[4]; //attacking
-    if (mytexture2.id == 0) {
-        printf("Error: Texture failed to load!\n");
-    }
-
-    Texture2D background1 = assets.texture[5];
-    if (mytexture2.id == 0) {
-        printf("Error: Texture failed to load!\n");
-    }
-
-    Texture2D skelwalk = assets.texture[16];
-    if (skelwalk.id == 0) {
-        printf("Error: Texture failed to load!\n");
-    }
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[20]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[21]); //20 HpSprites
 
     struct Playerinfo Playerdata ={.Position = {0, windheight},
                                    .isJumping = false,
@@ -937,60 +1102,30 @@ int main()
                                   
     int blockcount = loadmap("map.txt");
 
-    //init player
+    //init player and enemy
     int playerlastframedirection = 1;
     int playercurrentframe = 0;
     int playeranimationindex = 0;
-
-    //init enemy
     int enemyonblock[5];
-    int enemylastframedirection = -1;
-    int enemycurrentframe = 0;
-    int enemyanimationindex = 0;
-    float enemyanimationtimer = 0.0f;
-
+    int enemycount = MAX_ENEMIES;
     LoadAnimationDataplayer(&assets);
     randomenemypos(&blockcount, enemyonblock);
 
-    struct Playerinfo enemydata = { .Position = {blocksarray[enemyonblock[0]].rect.x + 10, 
-                                                 blocksarray[enemyonblock[0]].rect.y - ((assets.texture[16].height/2)-45)*0.15},
-                                    .attack = false,
-                                    .dead = false,
-                                    .isrunning = true,
-                                  };
-
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        initializeEnemy(&enemies[i], &blocksarray[enemyonblock[i]], i, assets.texture[16]);
+    }
     Camera2D camera = Camerasettings(&Playerdata);
+    Gamestate currentGameState = MENU;
+
     while (!WindowShouldClose())
     {
         UpdateMusicStream(assets.music[0]);
         BeginDrawing();
-        BeginMode2D(camera);
         ClearBackground(RAYWHITE);
-        drawbackground(&assets);
-        drawobstacles(&blockcount, &assets);
-        playerlastframedirection = calculatemovementplayer(&Playerdata, &blockcount, &assets);
-        updatecamera(&camera, &Playerdata);
-        printf("Player: %.2f, %.2f, %.2f, %.2f\n", Playerdata.Position.x, Playerdata. Position.y, Playerdata.width, Playerdata.height);
-
-        /*for (int i = 0; i < 5; i++) // Loop for 10 frames
-        {
-            int frameIndex = (i) % 5;
-            float frameWidth = assets.texture[17].width/5;
+        handleGameState(&currentGameState, &camera, &assets, &Playerdata, &blockcount, 
+                        &playerlastframedirection, &playercurrentframe, &playeranimationindex, 
+                        enemyonblock, enemies, &enemycount);
     
-            Rectangle sourceRect = {(frameWidth * (frameIndex)), 0, -frameWidth, assets.texture[17].height / 2};
-            Rectangle destRect = {100 + 150*i, 300, 100, 150};
-            Vector2 origin = {0, 0};
-            DrawTexturePro(assets.texture[17], sourceRect, destRect, origin, 0, WHITE);
-        }*/
-        /*Rectangle sourceRect ={240, 48, 63,30};
-        Rectangle destRect = {(300), 300, (sourceRect.width) * 2, sourceRect.height*2 };
-        Vector2 origin = {0, 0};*/
-
-        keepobjectwithinscreen(&Playerdata);
-        iterateanimationplayer(&assets, &Playerdata, &playercurrentframe, &playerlastframedirection, &playeranimationindex);
-        enemymovement(&enemydata, &Playerdata, enemyonblock, &enemylastframedirection);
-        enemyanimations(&enemydata, &assets, &enemycurrentframe, &enemylastframedirection, &enemyanimationindex, &enemyanimationtimer);
-        EndMode2D();
         EndDrawing();
     }
 

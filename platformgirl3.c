@@ -17,7 +17,7 @@ struct GameAssets
 { //store game assets
     Image images[30];
     Music music[10];
-    AudioStream audio[10];
+    Sound sound[20];
     Texture2D texture[30];
     float src_idlex[5];
     float src_idley[5];
@@ -42,7 +42,7 @@ struct GameAssets
     int texturecount;
     int imagecount;
     int musiccount;
-    int audiocount;
+    int soundcount;
 };
 
 struct Playerinfo 
@@ -89,7 +89,7 @@ struct Playerinfo *blocksarray = NULL;
 struct Playerinfo enemies[MAX_ENEMIES];
 
 //function prototypes
-void drawbackground(struct GameAssets* assets);
+void drawbackground(struct GameAssets* assets, Camera2D* camera);
 void drawobstacles(int* maxplatform, struct GameAssets* assets);
 int calculatemovementplayer(struct Playerinfo* player, int* maxplatform, struct GameAssets* assets);
 void updatecamera(Camera2D* camera, struct Playerinfo* player);
@@ -102,9 +102,15 @@ void removeDeadEnemies(struct Playerinfo enemies[MAX_ENEMIES], int* enemyCount);
 
 void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
                         int* playerlastframedirection, int* playercurrentframe, int* playeranimationindex, int enemyonblock[MAX_ENEMIES], 
-                        struct Playerinfo enemies[MAX_ENEMIES], int* enemycount){
+                        struct Playerinfo enemies[MAX_ENEMIES], int* enemycount, int* currentmusic){
+
     switch (*currentGameState){
         case MENU:
+        if (*currentmusic != 1) { 
+            StopMusicStream(assets->music[*currentmusic]);
+            PlayMusicStream(assets->music[1]);
+            *currentmusic = 1;
+        }
             Vector2 mousePos = GetMousePosition();
             Rectangle playButtonsrc = {97, 1, 46, 14};
             Rectangle optionButtonsrc = {193, 1, 46, 14};
@@ -113,21 +119,36 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
             Rectangle optionsButtondest = {windwidth/2 - 200, 450, 400, 100};
             Rectangle exitButtondest = {windwidth/2 - 200, 600, 400, 100};
 
+            static bool hoverplayed = false;
+            bool isbuttonhovered = false;
+
             if (CheckCollisionPointRec(mousePos, playButtondest)) {
                 playButtonsrc.x += 48;
+                isbuttonhovered = true;
                 if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                     *currentGameState = PLAYING;
                 }
-            }
-            else if (CheckCollisionPointRec(mousePos, optionsButtondest)) {
+            }else if (CheckCollisionPointRec(mousePos, optionsButtondest)) {
                 optionButtonsrc.x += 48;
-            }
-            else if (CheckCollisionPointRec(mousePos, exitButtondest)) {
+                isbuttonhovered = true;
+            }else if (CheckCollisionPointRec(mousePos, exitButtondest)) {
                 exitButtonsrc.x += 48;
+                isbuttonhovered = true;
+            }else {
+                isbuttonhovered = false;
             }
-            DrawTexturePro(assets->texture[19], playButtonsrc, playButtondest, (Vector2){0, 0}, 0, WHITE);
-            DrawTexturePro(assets->texture[19], optionButtonsrc, optionsButtondest, (Vector2){0, 0}, 0, WHITE);
-            DrawTexturePro(assets->texture[19], exitButtonsrc, exitButtondest, (Vector2){0, 0}, 0, WHITE);
+
+            if (isbuttonhovered && !hoverplayed){
+                PlaySound(assets->sound[0]);
+                hoverplayed = true;
+            }
+            if (!isbuttonhovered){ //reset the hovered state so the sound can repeat
+                hoverplayed = false;
+            }
+
+            DrawTexturePro(assets->texture[20], playButtonsrc, playButtondest, (Vector2){0, 0}, 0, WHITE);
+            DrawTexturePro(assets->texture[20], optionButtonsrc, optionsButtondest, (Vector2){0, 0}, 0, WHITE);
+            DrawTexturePro(assets->texture[20], exitButtonsrc, exitButtondest, (Vector2){0, 0}, 0, WHITE);
             
             static int currentframe = 0;
             static int animationindex = 0;
@@ -139,11 +160,24 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
             Playerdata->height *= 3;  
             iterateanimationplayer(assets, Playerdata, &currentframe, &facedirection, &animationindex);
             
+            for (int i = 0; i < 2; i++) {
+                enemies[i].Position.x = 100 + i * 150; // Spread enemies horizontally
+                enemies[i].Position.y = windheight - 200; // Position near the bottom of the screen
+                enemies[i].animationstate = 0; // Set to idle animation state
+                enemies[i].facedirection = (i % 2 == 0) ? 1 : -1; // Alternate facing directions
+                enemyanimations(&enemies[i], assets);
+            }
+
             break;
 
         case PLAYING:
+        if (*currentmusic != 0) { 
+            StopMusicStream(assets->music[*currentmusic]);
+            PlayMusicStream(assets->music[0]);
+            *currentmusic = 0;
+        }
             BeginMode2D(*camera);
-            drawbackground(assets);
+            drawbackground(assets, camera);
             drawobstacles(blockcount, assets);
             *playerlastframedirection = calculatemovementplayer(Playerdata, blockcount, assets);
             updatecamera(camera, Playerdata);
@@ -223,9 +257,9 @@ void Unloadresources(struct GameAssets* assets){
         UnloadMusicStream(assets->music[i]);
     }
 
-    printf("%d audios to be unloaded....", (assets->audiocount));
-    for (int i=0; i<assets->audiocount; i++){
-        UnloadAudioStream(assets->audio[i]);
+    printf("%d sounds to be unloaded....", (assets->soundcount));
+    for (int i=0; i<assets->soundcount; i++){
+        UnloadSound(assets->sound[i]);
     }
     
     printf("%d textures to be unloaded....", (assets->texturecount));
@@ -276,20 +310,36 @@ void updatecamera(Camera2D* camera, struct Playerinfo* player){
     ///////p.s. there is an issue when the character jumps from 2850 area to the fixed camera area and the y axis stuck
 }
 
-void drawbackground (struct GameAssets* assets){
+void drawbackground (struct GameAssets* assets, Camera2D* camera) {
     //draw background
-    for (int i=0; i<4; i++){ //sky
+    int numTiles = (mapwidth / windwidth) + 1; // Add 1 to ensure full coverage
+    float skySpeed = 0.1f;       // Slowest (farthest layer)
+    float mountainSpeed1 = 0.3f; // Mid-layer
+    float mountainSpeed2 = 0.5f; // Closer layer
+
+    // Calculate offsets based on camera position
+    float skyOffset = -camera->target.x * skySpeed;
+    float mountainOffset1 = -camera->target.x * mountainSpeed1;
+    float mountainOffset2 = -camera->target.x * mountainSpeed2;
+    // Draw the sky
+    for (int i = 0; i < numTiles; i++) {
         Rectangle skysrc = {0, 0, assets->texture[6].width, assets->texture[6].height};
-        Rectangle skydest = {(-windwidth)/2 + (i * windwidth), -100, windwidth, windheight + 200};  
+        Rectangle skydest = {i * skysrc.width, -100, skysrc.width, skysrc.height};  
         Vector2 origin = {0, 0};
         DrawTexturePro(assets->texture[6], skysrc, skydest, origin, 0, WHITE);
     }
 
-    for (int i=0; i<3; i++){ //mountain
+    for (int i = 0; i < numTiles; i++) {
         Rectangle mountainsrc = {0, 0, assets->texture[7].width, assets->texture[7].height};
-        Rectangle mountaindest = {(-windwidth)/2 + (i * windwidth), windheight-mountainsrc.height-740, windwidth, windheight*1.3};
+        Rectangle mountaindest = {i * mountainsrc.width, windheight - 500, windwidth, 400}; // Adjust position and size
         Vector2 origin = {0, 0};
         DrawTexturePro(assets->texture[7], mountainsrc, mountaindest, origin, 0, WHITE);
+    }
+    for (int i = 0; i < numTiles; i++) {
+        Rectangle mountainsrc2 = {0, 0, assets->texture[8].width, assets->texture[8].height};
+        Rectangle mountaindest2 = {i * mountainsrc2.width, windheight - 400, windwidth, 300}; // Adjust position and size
+        Vector2 origin = {0, 0};
+        DrawTexturePro(assets->texture[8], mountainsrc2, mountaindest2, origin, 0, WHITE);
     }
     
     /*for (int i=0; i<3; i++){ //nightsky
@@ -848,6 +898,10 @@ void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets){
     float dt = GetFrameTime();
     Texture2D texture;
 
+    if (enemy->animationstate == 0){
+        framecount = 10;
+        frametimer = 30;
+    }
     if (enemy->animationstate == 1){
         framecount = 10;
         frametimer = 30;
@@ -894,6 +948,17 @@ void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets){
     }
 
     Rectangle sourceRect, destRect;
+    if (enemy->animationstate == 0){
+        texture = assets->texture[19];
+        int frameIndex = enemy->animationindex % 5;  // 0-4 for first row, 0-4 again for second row
+        int rowIndex = (enemy->animationindex < 5) ? 0 : 1; // First 5 use row 0, next 5 use row 1
+        float frameWidth = texture.width / 5;
+
+        sourceRect = (Rectangle){(frameWidth * (frameIndex)) + 10, rowIndex * (assets->texture[16].height / 2), 
+                                frameWidth, assets->texture[16].height / 2 - 45};
+
+        destRect = (Rectangle){enemy->Position.x, enemy->Position.y + 10, 105, 140};
+    }
     if (enemy->animationstate == 1)
     {
         texture = assets->texture[16];
@@ -1057,9 +1122,9 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("Images/Jump_KG_2.gif"); //5
     assets.images[assets.imagecount++] = LoadImage("Images/Attack_KG_2.png");
     assets.images[assets.imagecount++] = LoadImage("Images/Shield_Up_KG_1.png"); //7
-    assets.images[assets.imagecount++] = LoadImage("Images/sky.png");
-    assets.images[assets.imagecount++] = LoadImage("Images/mountain.png"); //9
-    assets.images[assets.imagecount++] = LoadImage("Images/background.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/skybg.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/mountains.png"); //9
+    assets.images[assets.imagecount++] = LoadImage("Images/mountain2.png");
     assets.images[assets.imagecount++] = LoadImage("Images/tree2.png");
     assets.images[assets.imagecount++] = LoadImage("Images/forestbackground.png"); ///might not use
     assets.images[assets.imagecount++] = LoadImage("Images/Tile1.png"); //13
@@ -1069,11 +1134,17 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("enemies/arrowskelwalk.png"); //17
     assets.images[assets.imagecount++] = LoadImage("enemies/arrowskeldead.png");
     assets.images[assets.imagecount++] = LoadImage("enemies/arrow.png"); //19
+    assets.images[assets.imagecount++] = LoadImage("enemies/arrowskelidle.png");
     assets.images[assets.imagecount++] = LoadImage("Images/MenuSprites.png");
-    assets.images[assets.imagecount++] = LoadImage("Images/HPSprites.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/HPSprites.png"); //22
     //assets.images[assets.imagecount++] = LoadImage("Landing_KG_2.gif");
 
     assets.music[assets.musiccount++] = LoadMusicStream("Music/13 Always With Me_ Spirited Away (Pi.mp3");
+    assets.music[assets.musiccount++] = LoadMusicStream("Music/homemusic.mp3");
+    assets.music[assets.musiccount++] = LoadMusicStream("Music/shopmusic.mp3"); //2
+
+    assets.sound[assets.soundcount++] = LoadSound("Music/Menu_Hover.mp3");
+    //assets.sound[assets.soundcount++] = LoadSound("Music/Menu_Hover.mp3");
 
     ImageFormat(&assets.images[0], PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
     SetWindowIcon(assets.images[0]); 
@@ -1100,8 +1171,9 @@ int main()
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[17]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[18]); //17
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[19]);
-    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[20]);
-    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[21]); //20 HpSprites
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[20]); //19 skelidle
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[21]); 
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[22]); //21 HpSprites
 
     struct Playerinfo Playerdata ={.Position = {0, windheight},
                                    .isJumping = false,
@@ -1124,15 +1196,16 @@ int main()
     }
     Camera2D camera = Camerasettings(&Playerdata);
     Gamestate currentGameState = MENU;
+    int currentmusic = -1; //no music playing at the start
 
     while (!WindowShouldClose())
     {
-        UpdateMusicStream(assets.music[0]);
+        UpdateMusicStream(assets.music[currentmusic]);
         BeginDrawing();
         ClearBackground(RAYWHITE);
         handleGameState(&currentGameState, &camera, &assets, &Playerdata, &blockcount, 
                         &playerlastframedirection, &playercurrentframe, &playeranimationindex, 
-                        enemyonblock, enemies, &enemycount);
+                        enemyonblock, enemies, &enemycount, &currentmusic);
     
         EndDrawing();
     }

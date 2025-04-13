@@ -113,218 +113,232 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
 
     switch (*currentGameState){
         case MENU:
-        static float musicVolume = 0.5f; // Default volume
-        static bool settingsLoaded = false; // Ensure settings are only loaded once
+            static float musicVolume = 0.5f; // Default volume
+            static bool settingsLoaded = false; // Ensure settings are only loaded once
 
-        if (*currentmusic != 1) { 
-            StopMusicStream(assets->music[*currentmusic]);
-            PlayMusicStream(assets->music[1]);
-            *currentmusic = 1;
-        }
-        if (!settingsLoaded) {
-            FILE *file = fopen("settings.txt", "r");
-            if (file) {
-                if (fscanf(file, "MusicVolume=%f\n", &musicVolume) == 1) {
-                    SetMusicVolume(assets->music[*currentmusic], musicVolume); // Apply saved volume
-                }
-                fclose(file);
+            if (*currentmusic != 1) { 
+                StopMusicStream(assets->music[*currentmusic]);
+                PlayMusicStream(assets->music[1]);
+                *currentmusic = 1;
             }
-            settingsLoaded = true;}
+            if (!settingsLoaded) {
+                FILE *file = fopen("settings.txt", "r");
+                if (file) {
+                    if (fscanf(file, "MusicVolume=%f\n", &musicVolume) == 1) {
+                        SetMusicVolume(assets->music[*currentmusic], musicVolume); // Apply saved volume
+                    }
+                    fclose(file);
+                }
+                settingsLoaded = true;
+            }
 
+                Vector2 mousePos = GetMousePosition();
+                Rectangle playButtonsrc = {97, 1, 46, 14};
+                Rectangle optionButtonsrc = {193, 1, 46, 14};
+                Rectangle exitButtonsrc = {481, 1, 46, 14};
+                Rectangle playButtondest = {windwidth/2 - 200, 250, 400, 100};
+                Rectangle optionsButtondest = {windwidth/2 - 200, 400, 400, 100};
+                Rectangle exitButtondest = {windwidth/2 - 200, 550, 400, 100};
+
+                static bool hoverplayed = false;
+                bool isbuttonhovered = false;
+                if (CheckCollisionPointRec(mousePos, playButtondest)) {
+                    playButtonsrc.x += 48;
+                    isbuttonhovered = true;
+                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                        *currentGameState = LOADSAVES;
+                    }
+                }else if (CheckCollisionPointRec(mousePos, optionsButtondest)) {
+                    optionButtonsrc.x += 48;
+                    isbuttonhovered = true;
+                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                        *currentGameState = OPTIONS; 
+                    }
+                }else if (CheckCollisionPointRec(mousePos, exitButtondest)) {
+                    exitButtonsrc.x += 48;
+                    isbuttonhovered = true;
+                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                        *currentGameState = QUIT; 
+                    }
+                }else {
+                    isbuttonhovered = false;
+                }
+
+                if (isbuttonhovered && !hoverplayed){
+                    PlaySound(assets->sound[0]);
+                    hoverplayed = true;
+                }
+                if (!isbuttonhovered){ //reset the hovered state so the sound can repeat
+                    hoverplayed = false;
+                }
+                
+                for (int i = 0; i < (mapwidth/windwidth); i++) {
+                    Rectangle skysrc = {0, 0, assets->texture[6].width, assets->texture[6].height};
+                    Rectangle skydest = {i * assets->texture[6].width, 0, assets->texture[6].width, assets->texture[6].height/2};
+                    DrawTexturePro(assets->texture[6], skysrc, skydest, (Vector2){0, 0}, 0, WHITE);
+                }
+                DrawTexturePro(assets->texture[20], playButtonsrc, playButtondest, (Vector2){0, 0}, 0, WHITE);
+                DrawTexturePro(assets->texture[20], optionButtonsrc, optionsButtondest, (Vector2){0, 0}, 0, WHITE);
+                DrawTexturePro(assets->texture[20], exitButtonsrc, exitButtondest, (Vector2){0, 0}, 0, WHITE);
+                drawbackground(assets, camera, 1, 0.7f);
+                shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
+                drawtrees(assets, 3, 0, 310, 4);
+
+                static int currentframe = 0;
+                static int animationindex = 0;
+                static int facedirection = 1;
+                Playerdata->animationstate = 0; 
+                Playerdata->Position.x = windwidth/2 - Playerdata->width/2;
+                Playerdata->Position.y = 250 - Playerdata->height; 
+                Playerdata->width *= 3;
+                Playerdata->height *= 3;  
+                iterateanimationplayer(assets, Playerdata, &currentframe, &facedirection, &animationindex);
+                
+                for (int i = 0; i < 2; i++) {
+                    enemies[i].Position.x = 200 + i * 100; // Spread enemies horizontally
+                    enemies[i].Position.y = windheight - 240; // Position near the bottom of the screen
+                    enemies[i].animationstate = 0; // Set to idle animation state
+                    enemies[i].facedirection = (i % 2 == 0) ? 1 : -1; // Alternate facing directions
+                    enemyanimations(&enemies[i], assets);
+                }
+                break;
+
+        case LOADSAVES: 
+        {
+            Rectangle loadButton = {windwidth / 2 - 200, 300, 400, 100};
+            Rectangle newGameButton = {windwidth / 2 - 200, 450, 400, 100};
+            Rectangle backButton = {windwidth / 2 - 200, 600, 400, 100}; // Back button
             Vector2 mousePos = GetMousePosition();
-            Rectangle playButtonsrc = {97, 1, 46, 14};
-            Rectangle optionButtonsrc = {193, 1, 46, 14};
-            Rectangle exitButtonsrc = {481, 1, 46, 14};
-            Rectangle playButtondest = {windwidth/2 - 200, 300, 400, 100};
-            Rectangle optionsButtondest = {windwidth/2 - 200, 450, 400, 100};
-            Rectangle exitButtondest = {windwidth/2 - 200, 600, 400, 100};
-
-            static bool hoverplayed = false;
-            bool isbuttonhovered = false;
-            if (CheckCollisionPointRec(mousePos, playButtondest)) {
-                playButtonsrc.x += 48;
-                isbuttonhovered = true;
-                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                    *currentGameState = LOADSAVES;
+        
+            // Draw buttons
+            DrawRectangleRec(loadButton, LIGHTGRAY);
+            DrawRectangleRec(newGameButton, LIGHTGRAY);
+            DrawRectangleRec(backButton, LIGHTGRAY); // Draw back button
+        
+            DrawText("Load Game", loadButton.x + 100, loadButton.y + 30, 30, BLACK);
+            DrawText("New Game", newGameButton.x + 100, newGameButton.y + 30, 30, BLACK);
+            DrawText("Back", backButton.x + 150, backButton.y + 30, 30, BLACK); // Back button text
+        
+            // Handle Load Game button click
+            if (CheckCollisionPointRec(mousePos, loadButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                FILE *file = fopen("savegame.txt", "r");
+                if (file) {
+                    // Load saved game data
+                    fscanf(file, "PlayerPositionX=%f\n", &Playerdata->Position.x);
+                    fscanf(file, "PlayerPositionY=%f\n", &Playerdata->Position.y);
+                    fscanf(file, "MusicVolume=%f\n", &musicVolume);
+                    fclose(file);
+        
+                    SetMusicVolume(assets->music[*currentmusic], musicVolume); // Apply saved volume
+                    *currentGameState = PLAYING; // Start playing the game
+                } else {
+                    DrawText("No save file found!", windwidth / 2 - 150, windheight / 2 + 200, 20, RED);
                 }
-            }else if (CheckCollisionPointRec(mousePos, optionsButtondest)) {
-                optionButtonsrc.x += 48;
-                isbuttonhovered = true;
-                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                    *currentGameState = OPTIONS; 
-                }
-            }else if (CheckCollisionPointRec(mousePos, exitButtondest)) {
-                exitButtonsrc.x += 48;
-                isbuttonhovered = true;
-                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                    *currentGameState = QUIT; 
-                }
-            }else {
-                isbuttonhovered = false;
             }
-
-            if (isbuttonhovered && !hoverplayed){
-                PlaySound(assets->sound[0]);
-                hoverplayed = true;
+        
+            // Handle New Game button click
+            if (CheckCollisionPointRec(mousePos, newGameButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                // Start a new game
+                Playerdata->Position.x = windwidth / 2 - Playerdata->width / 2;
+                Playerdata->Position.y = windheight - Playerdata->height;
+                *currentGameState = PLAYING; // Start playing the game
             }
-            if (!isbuttonhovered){ //reset the hovered state so the sound can repeat
-                hoverplayed = false;
-            }
-            
-            for (int i = 0; i < (mapwidth/windwidth); i++) {
-                Rectangle skysrc = {0, 0, assets->texture[6].width, assets->texture[6].height};
-                Rectangle skydest = {i * assets->texture[6].width, 0, assets->texture[6].width, assets->texture[6].height/2};
-                DrawTexturePro(assets->texture[6], skysrc, skydest, (Vector2){0, 0}, 0, WHITE);
-            }
-            DrawTexturePro(assets->texture[20], playButtonsrc, playButtondest, (Vector2){0, 0}, 0, WHITE);
-            DrawTexturePro(assets->texture[20], optionButtonsrc, optionsButtondest, (Vector2){0, 0}, 0, WHITE);
-            DrawTexturePro(assets->texture[20], exitButtonsrc, exitButtondest, (Vector2){0, 0}, 0, WHITE);
-            drawbackground(assets, camera, 1, 0.7f);
-            shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
-            drawtrees(assets, 3, 0, 310, 4);
-
-            static int currentframe = 0;
-            static int animationindex = 0;
-            static int facedirection = 1;
-            Playerdata->animationstate = 0; 
-            Playerdata->Position.x = windwidth/2 - Playerdata->width/2;
-            Playerdata->Position.y = 300 - Playerdata->height; 
-            Playerdata->width *= 3;
-            Playerdata->height *= 3;  
-            iterateanimationplayer(assets, Playerdata, &currentframe, &facedirection, &animationindex);
-            
-            for (int i = 0; i < 2; i++) {
-                enemies[i].Position.x = 200 + i * 100; // Spread enemies horizontally
-                enemies[i].Position.y = windheight - 240; // Position near the bottom of the screen
-                enemies[i].animationstate = 0; // Set to idle animation state
-                enemies[i].facedirection = (i % 2 == 0) ? 1 : -1; // Alternate facing directions
-                enemyanimations(&enemies[i], assets);
+        
+            // Handle Back button click
+            if (CheckCollisionPointRec(mousePos, backButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                *currentGameState = MENU; // Return to the main menu
             }
             break;
+        }
 
-            case LOADSAVES: {
-                Rectangle loadButton = {windwidth / 2 - 200, 300, 400, 100};
-                Rectangle newGameButton = {windwidth / 2 - 200, 450, 400, 100};
-                Vector2 mousePos = GetMousePosition();
-            
-                DrawRectangleRec(loadButton, LIGHTGRAY);
-                DrawRectangleRec(newGameButton, LIGHTGRAY);
-                DrawText("Load Game", loadButton.x + 100, loadButton.y + 30, 30, BLACK);
-                DrawText("New Game", newGameButton.x + 100, newGameButton.y + 30, 30, BLACK);
-            
-                // Handle button clicks
-                if (CheckCollisionPointRec(mousePos, loadButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                    FILE *file = fopen("savegame.txt", "r");
-                    if (file) {
-                        // Load saved game data
-                        fscanf(file, "PlayerPositionX=%f\n", &Playerdata->Position.x);
-                        fscanf(file, "PlayerPositionY=%f\n", &Playerdata->Position.y);
-                        fscanf(file, "MusicVolume=%f\n", &musicVolume);
-                        fclose(file);
-            
-                        SetMusicVolume(assets->music[*currentmusic], musicVolume); // Apply saved volume
-                        *currentGameState = PLAYING; // Start playing the game
-                    } else {
-                        DrawText("No save file found!", windwidth / 2 - 150, windheight / 2 + 200, 20, RED);
-                    }
-                }
-            
-                if (CheckCollisionPointRec(mousePos, newGameButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                    // Start a new game
-                    Playerdata->Position.x = windwidth / 2 - Playerdata->width / 2;
-                    Playerdata->Position.y = windheight - Playerdata->height;
-                    *currentGameState = PLAYING; // Start playing the game
-                }
-                break;
+        case OPTIONS: 
+        {
+            Rectangle optiontabsrc = {0, 0, 120, 140};
+            Rectangle optiontabdest = {600, 370, 900, windheight + 80};
+            Vector2 optiontaborigin = {optiontabdest.width/2, optiontabdest.height/2};
+            Vector2 mousePos = GetMousePosition();
+            Rectangle volumebuttondest = {300, 220, 250, 80};                
+            Rectangle volumeSlider = {windwidth / 2, 235, 250, 40}; 
+
+            DrawTexturePro(assets->texture[22], optiontabsrc, optiontabdest, optiontaborigin, 0, WHITE);
+            DrawTexturePro(assets->texture[23], (Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},
+                            volumebuttondest, (Vector2){0, 0}, 0.0f, WHITE );
+
+            DrawRectangleRec(volumeSlider, LIGHTGRAY);
+            DrawRectangle(volumeSlider.x, volumeSlider.y, musicVolume * 200, volumeSlider.height, DARKBLUE);
+            aligntextcentre(volumebuttondest.x + volumebuttondest.width/2, 
+                            volumebuttondest.y + volumebuttondest.height/2, 30, "Music Volume", BLACK);
+
+            if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(mousePos, volumeSlider)) {
+                musicVolume = (mousePos.x - volumeSlider.x) / volumeSlider.width;
+                if (musicVolume < 0) musicVolume = 0;
+                if (musicVolume > 1) musicVolume = 1;
+                SetMusicVolume(assets->music[*currentmusic], musicVolume); // Adjust music volume
             }
 
-            case OPTIONS: {
-                Rectangle optiontabsrc = {0, 0, 120, 140};
-                Rectangle optiontabdest = {600, 370, 900, windheight + 80};
-                Vector2 optiontaborigin = {optiontabdest.width/2, optiontabdest.height/2};
-                Vector2 mousePos = GetMousePosition();
-                Rectangle volumebuttondest = {300, 220, 250, 80};                
-                Rectangle volumeSlider = {windwidth / 2, 235, 250, 40}; 
+            const char* controls[] = {"W", "A/D", "Left Mouse", "Shift", "P"};
+            const char* functions[] = {"Jump", "Move Left/Right", "Attack", "Parry", "Pause"};
+            int FontSize = 20; 
+            int emptybuttonWidth = 150; 
+            int emptybuttonHeight = 50; 
+            int controlsStartY = volumebuttondest.y + volumebuttondest.height + 50; // Starting Y position for controls
+            int buttonSpacing = 20; // Spacing between rows
+            int buttonGap = 20; // Gap between key and function buttons
+            static float settingssavedtimer = 0.0f;
+            
+            // Draw "Controls" title
+            DrawText("Controls:", 300, controlsStartY, FontSize + 5, BLACK);
 
-                DrawTexturePro(assets->texture[22], optiontabsrc, optiontabdest, optiontaborigin, 0, WHITE);
+            int numControls = 5;
+            for (int i = 0; i < numControls; i++) {
+                Rectangle keyButtonRect = {300, 
+                                            controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 30, emptybuttonWidth,emptybuttonHeight};
+                Rectangle functionButtonRect = {keyButtonRect.x + keyButtonRect.width + buttonGap, controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 30, 
+                                                emptybuttonWidth + 50, emptybuttonHeight};
                 DrawTexturePro(assets->texture[23], (Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},
-                                volumebuttondest, (Vector2){0, 0}, 0.0f, WHITE );
+                                keyButtonRect, (Vector2){0, 0}, 0.0f, WHITE );
+                DrawTexturePro(assets->texture[23],(Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},
+                                functionButtonRect, (Vector2){0, 0}, 0.0f, WHITE);
+                aligntextcentre(keyButtonRect.x + keyButtonRect.width / 2, keyButtonRect.y + keyButtonRect.height / 2, FontSize, controls[i], BLACK);
+                aligntextcentre(functionButtonRect.x + functionButtonRect.width / 2, functionButtonRect.y + functionButtonRect.height / 2, FontSize, functions[i], BLACK);
+            }
 
-                DrawRectangleRec(volumeSlider, LIGHTGRAY);
-                DrawRectangle(volumeSlider.x, volumeSlider.y, musicVolume * 200, volumeSlider.height, DARKBLUE);
-                aligntextcentre(volumebuttondest.x + volumebuttondest.width/2, 
-                                volumebuttondest.y + volumebuttondest.height/2, 30, "Music Volume", BLACK);
-
-                if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(mousePos, volumeSlider)) {
-                    musicVolume = (mousePos.x - volumeSlider.x) / volumeSlider.width;
-                    if (musicVolume < 0) musicVolume = 0;
-                    if (musicVolume > 1) musicVolume = 1;
-                    SetMusicVolume(assets->music[*currentmusic], musicVolume); // Adjust music volume
-                }
-
-                const char* controls[] = {"W", "A/D", "Left Mouse", "Shift", "P"};
-                const char* functions[] = {"Jump", "Move Left/Right", "Attack", "Parry", "Pause"};
-                int FontSize = 20; 
-                int emptybuttonWidth = 150; 
-                int emptybuttonHeight = 50; 
-                int controlsStartY = volumebuttondest.y + volumebuttondest.height + 50; // Starting Y position for controls
-                int buttonSpacing = 20; // Spacing between rows
-                int buttonGap = 20; // Gap between key and function buttons
-                static float settingssavedtimer = 0.0f;
-                
-                // Draw "Controls" title
-                DrawText("Controls:", 300, controlsStartY, FontSize + 5, BLACK);
-
-                int numControls = 5;
-                for (int i = 0; i < numControls; i++) {
-                    Rectangle keyButtonRect = {300, 
-                                               controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 30, emptybuttonWidth,emptybuttonHeight};
-                    Rectangle functionButtonRect = {keyButtonRect.x + keyButtonRect.width + buttonGap, controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 30, 
-                                                    emptybuttonWidth + 50, emptybuttonHeight};
-                    DrawTexturePro(assets->texture[23], (Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},
-                                    keyButtonRect, (Vector2){0, 0}, 0.0f, WHITE );
-                    DrawTexturePro(assets->texture[23],(Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},
-                                    functionButtonRect, (Vector2){0, 0}, 0.0f, WHITE);
-                    aligntextcentre(keyButtonRect.x + keyButtonRect.width / 2, keyButtonRect.y + keyButtonRect.height / 2, FontSize, controls[i], BLACK);
-                    aligntextcentre(functionButtonRect.x + functionButtonRect.width / 2, functionButtonRect.y + functionButtonRect.height / 2, FontSize, functions[i], BLACK);
-                }
-
-                Rectangle saveButton = {windwidth / 2 + 150, controlsStartY + 200, 200, 50};
-                Rectangle backButton = {saveButton.x, saveButton.y + 80, 200, 50};
-                DrawRectangleRec(saveButton, LIGHTGRAY);
-                aligntextcentre(saveButton.x + saveButton.width / 2, saveButton.y + saveButton.height / 2, 20, "Save Settings", BLACK);
-                DrawRectangleRec(backButton, LIGHTGRAY);
-                aligntextcentre(backButton.x + backButton.width / 2, backButton.y + backButton.height / 2, 20, "Back", BLACK);
-                DrawRectangleLines(saveButton.x, saveButton.y, saveButton.width, saveButton.height, BLACK);
-                DrawRectangleLines(backButton.x, backButton.y, backButton.width, backButton.height, BLACK);
-                
-                if (CheckCollisionPointRec(mousePos, saveButton)){
-                    DrawRectangleRec(saveButton, YELLOW);
-                    aligntextcentre(saveButton.x + saveButton.width / 2, saveButton.y + saveButton.height / 2, 20, "Save Settings", WHITE);
-                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                        FILE *file = fopen("settings.txt", "w");
-                        if (file) {
-                            fprintf(file, "MusicVolume=%.2f\n", musicVolume);
-                            fclose(file);
-                            settingssavedtimer = 3.0f;
-                        }
+            Rectangle saveButton = {windwidth / 2 + 150, controlsStartY + 200, 200, 50};
+            Rectangle backButton = {saveButton.x, saveButton.y + 80, 200, 50};
+            DrawRectangleRec(saveButton, LIGHTGRAY);
+            aligntextcentre(saveButton.x + saveButton.width / 2, saveButton.y + saveButton.height / 2, 20, "Save Settings", BLACK);
+            DrawRectangleRec(backButton, LIGHTGRAY);
+            aligntextcentre(backButton.x + backButton.width / 2, backButton.y + backButton.height / 2, 20, "Back", BLACK);
+            DrawRectangleLines(saveButton.x, saveButton.y, saveButton.width, saveButton.height, BLACK);
+            DrawRectangleLines(backButton.x, backButton.y, backButton.width, backButton.height, BLACK);
+            
+            if (CheckCollisionPointRec(mousePos, saveButton)){
+                DrawRectangleRec(saveButton, YELLOW);
+                aligntextcentre(saveButton.x + saveButton.width / 2, saveButton.y + saveButton.height / 2, 20, "Save Settings", WHITE);
+                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                    FILE *file = fopen("settings.txt", "w");
+                    if (file) {
+                        fprintf(file, "MusicVolume=%.2f\n", musicVolume);
+                        fclose(file);
+                        settingssavedtimer = 3.0f;
                     }
                 }
-                if (settingssavedtimer > 0.0f) {
-                    DrawText("Settings Saved!", saveButton.x - 20, saveButton.y + 140, 40, GREEN);
-                    settingssavedtimer -= GetFrameTime();
-                }
-
-                if (CheckCollisionPointRec(mousePos, backButton)){
-                    DrawRectangleRec(backButton, YELLOW);
-                    aligntextcentre(backButton.x + backButton.width / 2, backButton.y + backButton.height / 2, 20, "Back", WHITE);
-                        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                        *currentGameState = MENU; // Return to the main menu
-                        }
-                }
-                
-                break;
             }
+            if (settingssavedtimer > 0.0f) {
+                DrawText("Settings Saved!", saveButton.x - 20, saveButton.y + 140, 40, GREEN);
+                settingssavedtimer -= GetFrameTime();
+            }
+
+            if (CheckCollisionPointRec(mousePos, backButton)){
+                DrawRectangleRec(backButton, YELLOW);
+                aligntextcentre(backButton.x + backButton.width / 2, backButton.y + backButton.height / 2, 20, "Back", WHITE);
+                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                    *currentGameState = MENU; // Return to the main menu
+                    }
+            }
+            
+            break;
+        }
 
         case QUIT:
             Unloadresources(assets); 
@@ -334,11 +348,11 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
             break;
 
         case PLAYING:
-        if (*currentmusic != 0) { 
-            StopMusicStream(assets->music[*currentmusic]);
-            PlayMusicStream(assets->music[0]);
-            *currentmusic = 0;
-        }
+            if (*currentmusic != 0) { 
+                StopMusicStream(assets->music[*currentmusic]);
+                PlayMusicStream(assets->music[0]);
+                *currentmusic = 0;
+            }
             BeginMode2D(*camera);
             for (int j = 1; j < 5; j++){
                 if (j == 1){
@@ -366,8 +380,8 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
             }
             break;
 
-        case PAUSE: {
-
+        case PAUSE: 
+        {
             DrawText("Game Paused", windwidth / 2 - MeasureText("Game Paused", 40) / 2, windheight / 2 - 100, 40, BLACK);
             // Save Game button
             Rectangle saveButton = {windwidth / 2 - 100, windheight / 2, 200, 50};
@@ -404,7 +418,6 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
         }
 
         case GAMEOVER:
-            // Draw game over screen
             DrawText("Game Over. Press ENTER to Restart", windwidth / 2 - 150, windheight / 2, 20, BLACK);
             if (IsKeyPressed(KEY_ENTER))
             {

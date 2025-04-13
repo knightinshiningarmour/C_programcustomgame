@@ -205,12 +205,26 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
 
         case LOADSAVES: 
         {
+            Rectangle savesbgsrc = {0, 0, 120, 140};
+            Rectangle savesbgdest = {600, 400, 800, windheight + 40};
+            Vector2 savesbgorigin = {savesbgdest.width/2, savesbgdest.height/2};
+            
             Rectangle loadButton = {windwidth / 2 - 200, 300, 400, 100};
             Rectangle newGameButton = {windwidth / 2 - 200, 450, 400, 100};
-            Rectangle backButton = {windwidth / 2 - 200, 600, 400, 100}; // Back button
+            Rectangle backButton = {windwidth / 2 - 200, 600, 400, 100}; 
             Vector2 mousePos = GetMousePosition();
-        
-            // Draw buttons
+
+            Rectangle enemyskelsrc = {0, 0, assets->texture[19].width/5, assets->texture[19].height/2};
+            Rectangle enemyskeldestright = {950, windheight/2 - (enemyskelsrc.height/5), enemyskelsrc.width/2.5, enemyskelsrc.height/2.5};
+            Vector2 enemyskelorigin = {0, 0};
+            DrawTexturePro(assets->texture[25], savesbgsrc, savesbgdest, savesbgorigin, 0, WHITE);
+            DrawTexturePro(assets->texture[19], enemyskelsrc, enemyskeldestright, enemyskelorigin, 0, WHITE);
+            
+            enemyskelsrc.x += enemyskelsrc.width;
+            enemyskelsrc.width = -fabs(enemyskelsrc.width); // Flip horizontally
+
+            Rectangle enemyskeldestleft = {savesbgdest.x - 600, enemyskeldestright.y, fabs(enemyskelsrc.width) / 2.5, enemyskelsrc.height / 2.5};
+            DrawTexturePro(assets->texture[19], enemyskelsrc, enemyskeldestleft, enemyskelorigin, 0, WHITE);
             DrawRectangleRec(loadButton, LIGHTGRAY);
             DrawRectangleRec(newGameButton, LIGHTGRAY);
             DrawRectangleRec(backButton, LIGHTGRAY); // Draw back button
@@ -219,16 +233,13 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
             DrawText("New Game", newGameButton.x + 100, newGameButton.y + 30, 30, BLACK);
             DrawText("Back", backButton.x + 150, backButton.y + 30, 30, BLACK); // Back button text
         
-            // Handle Load Game button click
             if (CheckCollisionPointRec(mousePos, loadButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 FILE *file = fopen("savegame.txt", "r");
                 if (file) {
-                    // Load saved game data
                     fscanf(file, "PlayerPositionX=%f\n", &Playerdata->Position.x);
                     fscanf(file, "PlayerPositionY=%f\n", &Playerdata->Position.y);
                     fscanf(file, "MusicVolume=%f\n", &musicVolume);
                     fclose(file);
-        
                     SetMusicVolume(assets->music[*currentmusic], musicVolume); // Apply saved volume
                     *currentGameState = PLAYING; // Start playing the game
                 } else {
@@ -341,13 +352,16 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
         }
 
         case QUIT:
+        {
             Unloadresources(assets); 
             CloseAudioDevice();
             CloseWindow();
             exit(0);
             break;
+        }
 
         case PLAYING:
+        {
             if (*currentmusic != 0) { 
                 StopMusicStream(assets->music[*currentmusic]);
                 PlayMusicStream(assets->music[0]);
@@ -379,52 +393,105 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
                 *currentGameState = PAUSE;
             }
             break;
+        }
 
         case PAUSE: 
         {
-            DrawText("Game Paused", windwidth / 2 - MeasureText("Game Paused", 40) / 2, windheight / 2 - 100, 40, BLACK);
-            // Save Game button
-            Rectangle saveButton = {windwidth / 2 - 100, windheight / 2, 200, 50};
-            DrawRectangleRec(saveButton, LIGHTGRAY);
-            DrawText("Save Game", saveButton.x + 30, saveButton.y + 15, 20, BLACK);
-        
-            // Resume button
-            Rectangle resumeButton = {windwidth / 2 - 100, saveButton.y + 80, 200, 50};
-            DrawRectangleRec(resumeButton, LIGHTGRAY);
-            DrawText("Resume", resumeButton.x + 50, resumeButton.y + 15, 20, BLACK);
-        
-            // Handle Save Game button click
+            Rectangle pausebgsrc = {0, 0, 120, 140};
+            Rectangle pausebgdest = {600, 400, 800, windheight + 40};
+            Vector2 pausebgorigin = {pausebgdest.width/2, pausebgdest.height/2};
             Vector2 mousePos = GetMousePosition();
-            if (CheckCollisionPointRec(mousePos, saveButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                FILE *file = fopen("settings.txt", "w");
-                if (file) {
-                    // Save player position
-                    fprintf(file, "PlayerPositionX=%.2f\n", Playerdata->Position.x);
-                    fprintf(file, "PlayerPositionY=%.2f\n", Playerdata->Position.y);
-        
-                    // Save other game data (e.g., music volume)
-                    fprintf(file, "MusicVolume=%.2f\n", musicVolume);
-        
-                    fclose(file);
-                    DrawText("Game Saved!", windwidth / 2 - 100, saveButton.y + 70, 20, GREEN);
-                }
+            Rectangle charactersrc = {assets->src_shieldx[4], assets->src_shieldy[4], assets->src_shieldwidth[4], 58};
+            Rectangle characterdest = {0, windheight/2 - (charactersrc.height*4)/2, charactersrc.width * 4, charactersrc.height * 4};
+            Vector2 characterorigin = {0, 0};
+            Rectangle pauseenemyskelsrc = {2418, 1055, 600, assets->texture[15].height - 1085};
+            Rectangle pauseenemyskeldestright = {940, windheight/2 - (pauseenemyskelsrc.height/2.5)/2, pauseenemyskelsrc.width/2.5, pauseenemyskelsrc.height/2.5};
+            Vector2 pauseenemyskelorigin = {0, 0};
+            const char* text[] = {"RESUME", "SAVE GAME", "BACK TO MENU"};
+            static float savetimer = 0.0f;
+            static bool confirmedsave = false;
+
+            DrawTexturePro(assets->texture[25], pausebgsrc, pausebgdest, pausebgorigin, 0, WHITE);
+            DrawTexturePro(assets->texture[5], charactersrc, characterdest, characterorigin, 0, WHITE);
+            aligntextcentre(200 + pausebgdest.width/2, 150, 50, "PAUSED", BLACK);   
+            DrawTexturePro(assets->texture[19], pauseenemyskelsrc, pauseenemyskeldestright, pauseenemyskelorigin, 0, WHITE);
+            
+            for (int i = 0; i < 3; i++){
+                Rectangle emptybuttonsrc = {0, 0, assets->texture[23].width, assets->texture[23].height};
+                Rectangle emptybuttondest = {450, 250 + i * 150, 300, 100};
+                DrawTexturePro(assets->texture[23], emptybuttonsrc, emptybuttondest, (Vector2){0, 0}, 0.0f, WHITE);
+                aligntextcentre(emptybuttondest.x + emptybuttondest.width / 2, emptybuttondest.y + emptybuttondest.height / 2, 30, text[i], BLACK);
             }
         
-            // Handle Resume button click
+            Rectangle resumeButton = {450, 250, 300, 100};
+            Rectangle saveButton = {450, 400, 300, 100};
+            Rectangle backButton = {450, 550, 300, 100};
+
+            if (CheckCollisionPointRec(mousePos, saveButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                confirmedsave = true;
+            }
             if (CheckCollisionPointRec(mousePos, resumeButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 *currentGameState = PLAYING; // Resume the game
+            }
+            if (CheckCollisionPointRec(mousePos, backButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                *currentGameState = MENU; // Return to the main menu
+            }
+
+            if (confirmedsave) {
+                DrawTexturePro(assets->texture[23], (Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},(Rectangle){280, saveButton.y, 640, saveButton.height}, (Vector2){0, 0}, 0.0f, WHITE);
+                aligntextcentre(605, saveButton.y + saveButton.height / 2, 20, "Confirm Save? The previous data will be overwritten.", BLACK);
+                
+                Rectangle yesButton = {310, saveButton.y + 90, 280, 40};
+                Rectangle noButton = {590, saveButton.y + 90, 280, 40};
+
+                DrawRectangleRec(yesButton, BEIGE);
+                DrawRectangleRec(noButton, BEIGE);
+                DrawRectangleLines(yesButton.x, yesButton.y, yesButton.width, yesButton.height, BLACK);
+                DrawRectangleLines(noButton.x, noButton.y, noButton.width, noButton.height, BLACK);
+                aligntextcentre(yesButton.x + yesButton.width / 2, yesButton.y + yesButton.height / 2, 30, "Yes", WHITE);
+                aligntextcentre(noButton.x + noButton.width / 2, noButton.y + noButton.height / 2, 30, "No", WHITE);
+
+                if (CheckCollisionPointRec(mousePos, yesButton)){
+                    DrawRectangleRec(yesButton, LIGHTGRAY);
+                    aligntextcentre(yesButton.x + yesButton.width / 2, yesButton.y + yesButton.height / 2, 30, "Yes", BLACK);
+                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                        confirmedsave = false;
+                        FILE *file = fopen("savegame.txt", "w");
+                        if (file) {
+                            fprintf(file, "PlayerPositionX=%.2f\n", Playerdata->Position.x);
+                            fprintf(file, "PlayerPositionY=%.2f\n", Playerdata->Position.y);
+                            fprintf(file, "MusicVolume=%.2f\n", musicVolume);
+                            fclose(file);
+                        }
+                        savetimer = 3.0f;
+                    }
+                }
+                else if (CheckCollisionPointRec(mousePos, noButton)){
+                    DrawRectangleRec(noButton, LIGHTGRAY);
+                    aligntextcentre(noButton.x + noButton.width / 2, noButton.y + noButton.height / 2, 30, "No", BLACK);
+                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
+                        confirmedsave = false;
+                        savetimer = 0.0f;
+                    }
+                }
+            }
+            if (savetimer > 0.0f) {
+                aligntextcentre(200 + pausebgdest.width/2, 700, 50, "Game Saved!", GREEN); 
+                savetimer -= GetFrameTime();
             }
             break;
         }
 
         case GAMEOVER:
+        {
             DrawText("Game Over. Press ENTER to Restart", windwidth / 2 - 150, windheight / 2, 20, BLACK);
             if (IsKeyPressed(KEY_ENTER))
             {
                 *currentGameState = MENU;
             }
             break;
-            }
+        }
+    }
 }
 
 void aligntextcentre(int x, int y, int fontsize, const char* text, Color color) {
@@ -1380,6 +1447,7 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("Images/setting_menu.png");
     assets.images[assets.imagecount++] = LoadImage("Images/buttonempty.png");
     assets.images[assets.imagecount++] = LoadImage("Images/shop.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/empty_menu.png"); //26
     //assets.images[assets.imagecount++] = LoadImage("Landing_KG_2.gif");
 
     assets.music[assets.musiccount++] = LoadMusicStream("Music/13 Always With Me_ Spirited Away (Pi.mp3");
@@ -1420,6 +1488,8 @@ int main()
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[23]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[24]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[25]); //24 shop
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[26]); //25 empty menu
+
     struct Playerinfo Playerdata ={.Position = {0, windheight},
                                    .isJumping = false,
                                    .attack = false

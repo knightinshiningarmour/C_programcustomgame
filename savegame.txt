@@ -1,0 +1,3 @@
+PlayerPositionX=720.00
+PlayerPositionY=700.00
+MusicVolume=0.62

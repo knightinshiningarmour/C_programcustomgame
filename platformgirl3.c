@@ -97,6 +97,7 @@ void drawobstacles(int* maxplatform, struct GameAssets* assets);
 int calculatemovementplayer(struct Playerinfo* player, int* maxplatform, struct GameAssets* assets);
 void updatecamera(Camera2D* camera, struct Playerinfo* player);
 void keepobjectwithinscreen(struct Playerinfo* object);
+void LoadAnimationDataplayer(struct GameAssets* assets);
 void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player, int* currentframecount, int* facedirection, int* i);
 void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enemyonblock[MAX_ENEMIES], int enemyIndex);
 void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets);
@@ -106,159 +107,26 @@ void Unloadresources(struct GameAssets* assets);
 void aligntextcentre(int x, int y, int fontsize, const char* text, Color color);
 void shop(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic, int destx, int desty, int scalefactor);
 void drawtrees(struct GameAssets* assets, int i, int destx, int desty, int scalefactor);
+void savegamedata(struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float musicVolume, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera);
+void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera);
+void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera);
+void handleLoadSaves(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera);
+
 
 void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
                         int* playerlastframedirection, int* playercurrentframe, int* playeranimationindex, int enemyonblock[MAX_ENEMIES], 
                         struct Playerinfo enemies[MAX_ENEMIES], int* enemycount, int* currentmusic){
 
     switch (*currentGameState){
+        static float musicVolume = 0.5f; // Default volume
+        static bool gamedataloaded = false; 
         case MENU:
-            static float musicVolume = 0.5f; // Default volume
-            static bool settingsLoaded = false; // Ensure settings are only loaded once
-
-            if (*currentmusic != 1) { 
-                StopMusicStream(assets->music[*currentmusic]);
-                PlayMusicStream(assets->music[1]);
-                *currentmusic = 1;
-            }
-            if (!settingsLoaded) {
-                FILE *file = fopen("settings.txt", "r");
-                if (file) {
-                    if (fscanf(file, "MusicVolume=%f\n", &musicVolume) == 1) {
-                        SetMusicVolume(assets->music[*currentmusic], musicVolume); // Apply saved volume
-                    }
-                    fclose(file);
-                }
-                settingsLoaded = true;
-            }
-
-                Vector2 mousePos = GetMousePosition();
-                Rectangle playButtonsrc = {97, 1, 46, 14};
-                Rectangle optionButtonsrc = {193, 1, 46, 14};
-                Rectangle exitButtonsrc = {481, 1, 46, 14};
-                Rectangle playButtondest = {windwidth/2 - 200, 250, 400, 100};
-                Rectangle optionsButtondest = {windwidth/2 - 200, 400, 400, 100};
-                Rectangle exitButtondest = {windwidth/2 - 200, 550, 400, 100};
-
-                static bool hoverplayed = false;
-                bool isbuttonhovered = false;
-                if (CheckCollisionPointRec(mousePos, playButtondest)) {
-                    playButtonsrc.x += 48;
-                    isbuttonhovered = true;
-                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                        *currentGameState = LOADSAVES;
-                    }
-                }else if (CheckCollisionPointRec(mousePos, optionsButtondest)) {
-                    optionButtonsrc.x += 48;
-                    isbuttonhovered = true;
-                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                        *currentGameState = OPTIONS; 
-                    }
-                }else if (CheckCollisionPointRec(mousePos, exitButtondest)) {
-                    exitButtonsrc.x += 48;
-                    isbuttonhovered = true;
-                    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                        *currentGameState = QUIT; 
-                    }
-                }else {
-                    isbuttonhovered = false;
-                }
-
-                if (isbuttonhovered && !hoverplayed){
-                    PlaySound(assets->sound[0]);
-                    hoverplayed = true;
-                }
-                if (!isbuttonhovered){ //reset the hovered state so the sound can repeat
-                    hoverplayed = false;
-                }
-                
-                for (int i = 0; i < (mapwidth/windwidth); i++) {
-                    Rectangle skysrc = {0, 0, assets->texture[6].width, assets->texture[6].height};
-                    Rectangle skydest = {i * assets->texture[6].width, 0, assets->texture[6].width, assets->texture[6].height/2};
-                    DrawTexturePro(assets->texture[6], skysrc, skydest, (Vector2){0, 0}, 0, WHITE);
-                }
-                DrawTexturePro(assets->texture[20], playButtonsrc, playButtondest, (Vector2){0, 0}, 0, WHITE);
-                DrawTexturePro(assets->texture[20], optionButtonsrc, optionsButtondest, (Vector2){0, 0}, 0, WHITE);
-                DrawTexturePro(assets->texture[20], exitButtonsrc, exitButtondest, (Vector2){0, 0}, 0, WHITE);
-                drawbackground(assets, camera, 1, 0.7f);
-                shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
-                drawtrees(assets, 3, 0, 310, 4);
-
-                static int currentframe = 0;
-                static int animationindex = 0;
-                static int facedirection = 1;
-                Playerdata->animationstate = 0; 
-                Playerdata->Position.x = windwidth/2 - Playerdata->width/2;
-                Playerdata->Position.y = 250 - Playerdata->height; 
-                Playerdata->width *= 3;
-                Playerdata->height *= 3;  
-                iterateanimationplayer(assets, Playerdata, &currentframe, &facedirection, &animationindex);
-                
-                for (int i = 0; i < 2; i++) {
-                    enemies[i].Position.x = 200 + i * 100; // Spread enemies horizontally
-                    enemies[i].Position.y = windheight - 240; // Position near the bottom of the screen
-                    enemies[i].animationstate = 0; // Set to idle animation state
-                    enemies[i].facedirection = (i % 2 == 0) ? 1 : -1; // Alternate facing directions
-                    enemyanimations(&enemies[i], assets);
-                }
-                break;
+            handleMenuState(assets, Playerdata, currentGameState, currentmusic, &musicVolume, camera);
+            break;
 
         case LOADSAVES: 
         {
-            Rectangle savesbgsrc = {0, 0, 120, 140};
-            Rectangle savesbgdest = {600, 400, 800, windheight + 40};
-            Vector2 savesbgorigin = {savesbgdest.width/2, savesbgdest.height/2};
-            
-            Rectangle loadButton = {windwidth / 2 - 200, 300, 400, 100};
-            Rectangle newGameButton = {windwidth / 2 - 200, 450, 400, 100};
-            Rectangle backButton = {windwidth / 2 - 200, 600, 400, 100}; 
-            Vector2 mousePos = GetMousePosition();
-
-            Rectangle enemyskelsrc = {0, 0, assets->texture[19].width/5, assets->texture[19].height/2};
-            Rectangle enemyskeldestright = {950, windheight/2 - (enemyskelsrc.height/5), enemyskelsrc.width/2.5, enemyskelsrc.height/2.5};
-            Vector2 enemyskelorigin = {0, 0};
-            DrawTexturePro(assets->texture[25], savesbgsrc, savesbgdest, savesbgorigin, 0, WHITE);
-            DrawTexturePro(assets->texture[19], enemyskelsrc, enemyskeldestright, enemyskelorigin, 0, WHITE);
-            
-            enemyskelsrc.x += enemyskelsrc.width;
-            enemyskelsrc.width = -fabs(enemyskelsrc.width); // Flip horizontally
-
-            Rectangle enemyskeldestleft = {savesbgdest.x - 600, enemyskeldestright.y, fabs(enemyskelsrc.width) / 2.5, enemyskelsrc.height / 2.5};
-            DrawTexturePro(assets->texture[19], enemyskelsrc, enemyskeldestleft, enemyskelorigin, 0, WHITE);
-            DrawRectangleRec(loadButton, LIGHTGRAY);
-            DrawRectangleRec(newGameButton, LIGHTGRAY);
-            DrawRectangleRec(backButton, LIGHTGRAY); // Draw back button
-        
-            DrawText("Load Game", loadButton.x + 100, loadButton.y + 30, 30, BLACK);
-            DrawText("New Game", newGameButton.x + 100, newGameButton.y + 30, 30, BLACK);
-            DrawText("Back", backButton.x + 150, backButton.y + 30, 30, BLACK); // Back button text
-        
-            if (CheckCollisionPointRec(mousePos, loadButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                FILE *file = fopen("savegame.txt", "r");
-                if (file) {
-                    fscanf(file, "PlayerPositionX=%f\n", &Playerdata->Position.x);
-                    fscanf(file, "PlayerPositionY=%f\n", &Playerdata->Position.y);
-                    fscanf(file, "MusicVolume=%f\n", &musicVolume);
-                    fclose(file);
-                    SetMusicVolume(assets->music[*currentmusic], musicVolume); // Apply saved volume
-                    *currentGameState = PLAYING; // Start playing the game
-                } else {
-                    DrawText("No save file found!", windwidth / 2 - 150, windheight / 2 + 200, 20, RED);
-                }
-            }
-        
-            // Handle New Game button click
-            if (CheckCollisionPointRec(mousePos, newGameButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                // Start a new game
-                Playerdata->Position.x = windwidth / 2 - Playerdata->width / 2;
-                Playerdata->Position.y = windheight - Playerdata->height;
-                *currentGameState = PLAYING; // Start playing the game
-            }
-        
-            // Handle Back button click
-            if (CheckCollisionPointRec(mousePos, backButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                *currentGameState = MENU; // Return to the main menu
-            }
+            handleLoadSaves(assets, Playerdata, currentGameState, currentmusic, &musicVolume, camera);
             break;
         }
 
@@ -269,26 +137,32 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
             Vector2 optiontaborigin = {optiontabdest.width/2, optiontabdest.height/2};
             Vector2 mousePos = GetMousePosition();
             Rectangle volumebuttondest = {300, 220, 250, 80};                
-            Rectangle volumeSlider = {windwidth / 2, 235, 250, 40}; 
+            Rectangle volumeSlider = {windwidth / 2, 235, 200, 40}; 
 
             DrawTexturePro(assets->texture[22], optiontabsrc, optiontabdest, optiontaborigin, 0, WHITE);
             DrawTexturePro(assets->texture[23], (Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},
                             volumebuttondest, (Vector2){0, 0}, 0.0f, WHITE );
-
             DrawRectangleRec(volumeSlider, LIGHTGRAY);
             DrawRectangle(volumeSlider.x, volumeSlider.y, musicVolume * 200, volumeSlider.height, DARKBLUE);
             aligntextcentre(volumebuttondest.x + volumebuttondest.width/2, 
                             volumebuttondest.y + volumebuttondest.height/2, 30, "Music Volume", BLACK);
+            Rectangle togglebar = {(volumeSlider.x + musicVolume*200)-2, volumeSlider.y - 5, 4, volumeSlider.height + 10}; 
+            DrawRectangleRec(togglebar, DARKGRAY);
 
             if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && CheckCollisionPointRec(mousePos, volumeSlider)) {
                 musicVolume = (mousePos.x - volumeSlider.x) / volumeSlider.width;
-                if (musicVolume < 0) musicVolume = 0;
-                if (musicVolume > 1) musicVolume = 1;
+                if (musicVolume < 0){
+                    musicVolume = 0;}
+                if (musicVolume > 1) {
+                    musicVolume = 1;}
                 SetMusicVolume(assets->music[*currentmusic], musicVolume); // Adjust music volume
             }
+            char volumeText[10];
+            sprintf(volumeText, "%.0f", musicVolume * 100);
+            DrawText(volumeText, volumeSlider.x + volumeSlider.width + 20, volumeSlider.y+volumeSlider.height/2-10, 20, BLACK);
 
-            const char* controls[] = {"W", "A/D", "Left Mouse", "Shift", "P"};
-            const char* functions[] = {"Jump", "Move Left/Right", "Attack", "Parry", "Pause"};
+            const char* controls[] = {"Space", "A/D", "Left Mouse", "Shift", "P"};
+            const char* functions[] = {"Jump", "Left/Right", "Attack", "Parry", "Pause"};
             int FontSize = 20; 
             int emptybuttonWidth = 150; 
             int emptybuttonHeight = 50; 
@@ -344,7 +218,8 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
                 DrawRectangleRec(backButton, YELLOW);
                 aligntextcentre(backButton.x + backButton.width / 2, backButton.y + backButton.height / 2, 20, "Back", WHITE);
                     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-                    *currentGameState = MENU; // Return to the main menu
+                        *currentGameState = MENU; 
+                        settingssavedtimer = 0.0f;
                     }
             }
             
@@ -368,6 +243,12 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
                 *currentmusic = 0;
             }
             BeginMode2D(*camera);
+            if (!gamedataloaded) {
+                gamedataloaded = true;
+                printf("Load Game button clicked. Calling loadgamedata...\n");
+                loadgamedata(assets, Playerdata, currentGameState, currentmusic, &musicVolume, enemycount, enemies, camera);
+                printf("Load Game\n");
+            }
             for (int j = 1; j < 5; j++){
                 if (j == 1){
                     drawbackground(assets, camera, j, 0.7);
@@ -432,9 +313,11 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
             }
             if (CheckCollisionPointRec(mousePos, resumeButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 *currentGameState = PLAYING; // Resume the game
+                savetimer = 0.0f;
             }
             if (CheckCollisionPointRec(mousePos, backButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 *currentGameState = MENU; // Return to the main menu
+                gamedataloaded = false;
             }
 
             if (confirmedsave) {
@@ -456,13 +339,7 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
                     aligntextcentre(yesButton.x + yesButton.width / 2, yesButton.y + yesButton.height / 2, 30, "Yes", BLACK);
                     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                         confirmedsave = false;
-                        FILE *file = fopen("savegame.txt", "w");
-                        if (file) {
-                            fprintf(file, "PlayerPositionX=%.2f\n", Playerdata->Position.x);
-                            fprintf(file, "PlayerPositionY=%.2f\n", Playerdata->Position.y);
-                            fprintf(file, "MusicVolume=%.2f\n", musicVolume);
-                            fclose(file);
-                        }
+                        savegamedata(Playerdata, currentGameState, currentmusic, musicVolume, *enemycount, enemies, camera);
                         savetimer = 3.0f;
                     }
                 }
@@ -491,6 +368,171 @@ void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameA
             }
             break;
         }
+    }
+}
+
+void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume){
+    // Initialize player data
+    Playerdata->Position = (Vector2){windwidth / 2 - 50, windheight - 100};
+    Playerdata->width = 50;
+    Playerdata->height = 50;
+    Playerdata->currenthp = 100;
+    Playerdata->hitpoints = 100;
+    Playerdata->isJumping = false;
+    Playerdata->isfalling = false;
+    Playerdata->attack = false;
+    Playerdata->onshield = false;
+    Playerdata->animationstate = 0;
+    *currentGameState = MENU;
+    *currentmusic = -1; 
+    *musicVolume = 0.5f;
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        enemies[i] = (struct Playerinfo){
+            .Position = {200 + i * 100, windheight - 240},
+            .width = 50,
+            .height = 50,
+            .currenthp = 75,
+            .hitpoints = 75,
+            .dead = false,
+            .animationstate = 0,
+            .facedirection = (i % 2 == 0) ? 1 : -1
+        };
+    }
+    LoadAnimationDataplayer(assets);
+}
+
+void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera){
+    static bool settingsLoaded = false; 
+    static bool hoverplayed = false;   
+
+    if (*currentmusic != 1) { 
+        StopMusicStream(assets->music[*currentmusic]);
+        PlayMusicStream(assets->music[1]);
+        *currentmusic = 1;
+    }
+
+    if (!settingsLoaded) {
+        FILE *file = fopen("settings.txt", "r");
+        if (file) {
+            if (fscanf(file, "MusicVolume=%f\n", musicVolume) == 1) {
+                SetMusicVolume(assets->music[*currentmusic], *musicVolume);
+            }
+            fclose(file);
+        } else {
+            printf("Warning: settings.txt not found. Using default settings.\n");
+        }
+        settingsLoaded = true;
+    }
+    Vector2 mousePos = GetMousePosition();
+    Rectangle playButtonsrc = {97, 1, 46, 14};
+    Rectangle optionButtonsrc = {193, 1, 46, 14};
+    Rectangle exitButtonsrc = {481, 1, 46, 14};
+    Rectangle playButtondest = {windwidth/2 - 200, 250, 400, 100};
+    Rectangle optionsButtondest = {windwidth/2 - 200, 400, 400, 100};
+    Rectangle exitButtondest = {windwidth/2 - 200, 550, 400, 100};
+
+    bool isbuttonhovered = false;
+    if (CheckCollisionPointRec(mousePos, playButtondest)) {
+        playButtonsrc.x += 48;
+        isbuttonhovered = true;
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            *currentGameState = LOADSAVES;
+        }
+    }else if (CheckCollisionPointRec(mousePos, optionsButtondest)) {
+        optionButtonsrc.x += 48;
+        isbuttonhovered = true;
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            *currentGameState = OPTIONS; 
+        }
+    }else if (CheckCollisionPointRec(mousePos, exitButtondest)) {
+        exitButtonsrc.x += 48;
+        isbuttonhovered = true;
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            *currentGameState = QUIT; 
+        }
+    }else {
+        isbuttonhovered = false;
+    }
+
+    if (isbuttonhovered && !hoverplayed){
+        PlaySound(assets->sound[0]);
+        hoverplayed = true;
+    }
+    if (!isbuttonhovered){ //reset the hovered state so the sound can repeat
+        hoverplayed = false;
+    }
+    
+    for (int i = 0; i < (mapwidth/windwidth); i++) {
+        Rectangle skysrc = {0, 0, assets->texture[6].width, assets->texture[6].height};
+        Rectangle skydest = {i * assets->texture[6].width, 0, assets->texture[6].width, assets->texture[6].height/2};
+        DrawTexturePro(assets->texture[6], skysrc, skydest, (Vector2){0, 0}, 0, WHITE);
+    }
+    DrawTexturePro(assets->texture[20], playButtonsrc, playButtondest, (Vector2){0, 0}, 0, WHITE);
+    DrawTexturePro(assets->texture[20], optionButtonsrc, optionsButtondest, (Vector2){0, 0}, 0, WHITE);
+    DrawTexturePro(assets->texture[20], exitButtonsrc, exitButtondest, (Vector2){0, 0}, 0, WHITE);
+    drawbackground(assets, camera, 1, 0.7f);
+    shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
+    drawtrees(assets, 3, 0, 310, 4);
+
+    static int currentframe = 0;
+    static int animationindex = 0;
+    static int facedirection = 1;
+    Playerdata->animationstate = 0; 
+    Playerdata->Position.x = windwidth/2 - Playerdata->width/2;
+    Playerdata->Position.y = 250 - Playerdata->height; 
+    Playerdata->width *= 3;
+    Playerdata->height *= 3;  
+    iterateanimationplayer(assets, Playerdata, &currentframe, &facedirection, &animationindex);
+    
+    for (int i = 0; i < 2; i++) {
+        enemies[i].Position.x = 200 + i * 100; // Spread enemies horizontally
+        enemies[i].Position.y = windheight - 240; // Position near the bottom of the screen
+        enemies[i].animationstate = 0; // Set to idle animation state
+        enemies[i].facedirection = (i % 2 == 0) ? 1 : -1; // Alternate facing directions
+        enemyanimations(&enemies[i], assets);
+    }
+}
+
+void handleLoadSaves(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera){
+    
+    Rectangle savesbgsrc = {0, 0, 120, 140};
+    Rectangle savesbgdest = {600, 400, 800, windheight + 40};
+    Vector2 savesbgorigin = {savesbgdest.width/2, savesbgdest.height/2};
+    Rectangle loadButton = {450, 250, 300, 100};
+    Rectangle newGameButton = {450, 400, 300, 100};
+    Rectangle backButton = {450, 550, 300, 100};
+    Vector2 mousePos = GetMousePosition();
+    Rectangle enemyskelsrc = {0, 0, assets->texture[19].width/5, assets->texture[19].height/2};
+    Rectangle enemyskeldestright = {950, windheight/2 - (enemyskelsrc.height/5), enemyskelsrc.width/2.5, enemyskelsrc.height/2.5};
+    Vector2 enemyskelorigin = {0, 0};
+
+    DrawTexturePro(assets->texture[25], savesbgsrc, savesbgdest, savesbgorigin, 0, WHITE);
+    DrawTexturePro(assets->texture[19], enemyskelsrc, enemyskeldestright, enemyskelorigin, 0, WHITE);
+    enemyskelsrc.x += enemyskelsrc.width;
+    enemyskelsrc.width = -fabs(enemyskelsrc.width); // Flip horizontally
+    Rectangle enemyskeldestleft = {savesbgdest.x - 600, enemyskeldestright.y, fabs(enemyskelsrc.width) / 2.5, enemyskelsrc.height / 2.5};
+    DrawTexturePro(assets->texture[19], enemyskelsrc, enemyskeldestleft, enemyskelorigin, 0, WHITE);
+    
+    aligntextcentre(200 + savesbgdest.width/2, 150, 50, "LOAD GAME DATA", BLACK);  
+    const char* textload[] = {"LOAD GAME", "NEW GAME", "BACK TO MENU"};
+
+    for (int i = 0; i < 3; i++){
+        Rectangle emptybuttonsrc = {0, 0, assets->texture[23].width, assets->texture[23].height};
+        Rectangle emptybuttondest = {450, 250 + i * 150, 300, 100};
+        DrawTexturePro(assets->texture[23], emptybuttonsrc, emptybuttondest, (Vector2){0, 0}, 0.0f, WHITE);
+        aligntextcentre(emptybuttondest.x + emptybuttondest.width / 2, emptybuttondest.y + emptybuttondest.height / 2, 30, textload[i], BLACK);
+    }
+
+    if (CheckCollisionPointRec(mousePos, newGameButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        Playerdata->Position.x = windwidth / 2 - Playerdata->width / 2;
+        Playerdata->Position.y = windheight - Playerdata->height;
+        *currentGameState = PLAYING; 
+    }
+    if (CheckCollisionPointRec(mousePos, backButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        *currentGameState = MENU;
+    }
+    if (CheckCollisionPointRec(mousePos, loadButton) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        *currentGameState = PLAYING;
     }
 }
 
@@ -738,7 +780,6 @@ void collisionplayerblocks(char axis, struct Playerinfo* object, int* maxplatfor
     }
     
 }
-
 
 int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct GameAssets *assets) {
     static int facedirection = 1;
@@ -1028,6 +1069,81 @@ void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player
 
 }
 
+void savegamedata(struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float musicVolume, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera) {
+    FILE *file = fopen("savegame.txt", "w");
+    if (file) {
+        fprintf(file, "PlayerPositionX=%.2f\n", Playerdata->Position.x);
+        fprintf(file, "PlayerPositionY=%.2f\n", Playerdata->Position.y);
+        fprintf(file, "PlayerHealth=%d\n", Playerdata->currenthp);
+        fprintf(file, "PlayerMaxHealth=%d\n", Playerdata->hitpoints);
+        fprintf(file, "MusicVolume=%.2f\n", musicVolume);
+        fprintf(file, "EnemyCount=%d\n", enemycount);
+        for (int i = 0; i < enemycount; i++) {
+            fprintf(file, "Enemy%dPositionX=%.2f\n", i, enemies[i].Position.x);
+            fprintf(file, "Enemy%dPositionY=%.2f\n", i, enemies[i].Position.y);
+            fprintf(file, "Enemy%dHealth=%d\n", i, enemies[i].hitpoints);
+            fprintf(file, "Enemy%dDead=%d\n", i, enemies[i].dead);
+        }
+        fprintf(file, "CameraTargetX=%.2f\n", camera->target.x);
+        fprintf(file, "CameraTargetY=%.2f\n", camera->target.y);
+        fprintf(file, "CameraZoom=%.2f\n", camera->zoom);
+
+        fclose(file);
+    }
+}
+
+void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera) {
+    FILE *file = fopen("savegame.txt", "r");
+    char line[100];
+    if (!file) {
+        printf("Error: No save file found. Starting a new game.\n");
+        return;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        if (strstr(line, "PlayerPositionX=")) {
+            sscanf(line, "PlayerPositionX=%f", &Playerdata->Position.x);
+        } else if (strstr(line, "PlayerPositionY=")) {
+            sscanf(line, "PlayerPositionY=%f", &Playerdata->Position.y);
+        } else if (strstr(line, "PlayerHealth=")) {
+            sscanf(line, "PlayerHealth=%d", &Playerdata->currenthp);
+        } else if (strstr(line, "PlayerMaxHealth=")) {
+            sscanf(line, "PlayerMaxHealth=%d", &Playerdata->hitpoints);
+        } else if (strstr(line, "MusicVolume=")) {
+            sscanf(line, "MusicVolume=%f", musicVolume);
+        } else if (strstr(line, "EnemyCount=")) {
+            sscanf(line, "EnemyCount=%d", enemycount);
+        } else if (strstr(line, "CameraTargetX=")) {
+            sscanf(line, "CameraTargetX=%f", &camera->target.x);
+        } else if (strstr(line, "CameraTargetY=")) {
+            sscanf(line, "CameraTargetY=%f", &camera->target.y);
+        } else if (strstr(line, "CameraZoom=")) {
+            sscanf(line, "CameraZoom=%f", &camera->zoom);
+        }
+    }
+
+    while (fgets(line, sizeof(line), file)){
+        for (int i = 0; i < *enemycount; i++) {
+            if (sscanf(line, "Enemy%dPositionX=%f", &i, &enemies[i].Position.x) == 2) {
+                sscanf(line, "Enemy%dPositionY=%f", &i, &enemies[i].Position.y);
+                sscanf(line, "Enemy%dHealth=%d", &i, &enemies[i].hitpoints);
+                sscanf(line, "Enemy%dDead=%d", &i, &enemies[i].dead);
+            }
+        }
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        if (fscanf(file, "CameraTargetX=%f\n", &camera->target.x) != 1 ||
+            fscanf(file, "CameraTargetY=%f\n", &camera->target.y) != 1 ||
+            fscanf(file, "CameraZoom=%f\n", &camera->zoom) != 1) 
+        {
+            camera->target = (Vector2){0, 0};
+            camera->zoom = 1.0f;
+        }
+    }
+    fclose(file);
+    printf("Game data loaded successfully.\n");
+}
 
 int loadmap(const char* filename){
     FILE* File = fopen(filename, "w");
@@ -1100,7 +1216,6 @@ int loadmap(const char* filename){
     fclose(Fileread);
 }
 
-
 void drawobstacles(int* maxplatform, struct GameAssets* assets){
     Rectangle sourceRect ={240, 48, 63,30};
     Vector2 origin = {0, 0};
@@ -1161,7 +1276,6 @@ void keepobjectwithinscreen(struct Playerinfo* object){
         }
     }
 }
-
 
 void randomenemypos(int* maxplatform, int enemyonblock[MAX_ENEMIES]){
     for (int i = 0; i < MAX_ENEMIES; i++) {
@@ -1490,28 +1604,21 @@ int main()
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[25]); //24 shop
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[26]); //25 empty menu
 
-    struct Playerinfo Playerdata ={.Position = {0, windheight},
-                                   .isJumping = false,
-                                   .attack = false
-                                  };
-                                  
+    struct Playerinfo Playerdata;
+    Camera2D camera = Camerasettings(&Playerdata);
+    Gamestate currentGameState = MENU;
+    int currentmusic, enemyonblock[MAX_ENEMIES]; 
     int blockcount = loadmap("map.txt");
-
-    //init player and enemy
     int playerlastframedirection = 1;
     int playercurrentframe = 0;
     int playeranimationindex = 0;
-    int enemyonblock[5];
     int enemycount = MAX_ENEMIES;
-    LoadAnimationDataplayer(&assets);
+    float musicVolume;
     randomenemypos(&blockcount, enemyonblock);
-
+    initializeGameState(&assets, &Playerdata, &currentGameState, &currentmusic, &musicVolume);
     for (int i = 0; i < MAX_ENEMIES; i++) {
         initializeEnemy(&enemies[i], &blocksarray[enemyonblock[i]], i, assets.texture[16]);
     }
-    Camera2D camera = Camerasettings(&Playerdata);
-    Gamestate currentGameState = MENU;
-    int currentmusic = -1; //no music playing at the start
 
     while (!WindowShouldClose())
     {
@@ -1525,6 +1632,11 @@ int main()
         EndDrawing();
     }
 
+    FILE* file = fopen("settings.txt", "r");
+    if (file){
+        fscanf(file, "MusicVolume=%f\n", &musicVolume);
+        fclose(file);}
+    savegamedata(&Playerdata, &currentGameState, &currentmusic, musicVolume, enemycount, enemies, &camera);
     Unloadresources(&assets); 
     CloseAudioDevice();
     CloseWindow();

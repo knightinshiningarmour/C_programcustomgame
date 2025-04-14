@@ -1,1 +1,1 @@
-MusicVolume=0.62
+MusicVolume=1.00

@@ -99,7 +99,7 @@ void updatecamera(Camera2D* camera, struct Playerinfo* player);
 void keepobjectwithinscreen(struct Playerinfo* object, struct GameAssets* assets);
 void LoadAnimationDataplayer(struct GameAssets* assets);
 void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player, int* currentframecount, int* facedirection, int* i);
-void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enemyonblock[MAX_ENEMIES], int enemyIndex);
+void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enemyonblock[MAX_ENEMIES], int enemyIndex, struct GameAssets* assets);
 void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets);
 void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], int facedirection);
 void removeDeadEnemies(struct Playerinfo enemies[MAX_ENEMIES], int* enemyCount);
@@ -467,7 +467,7 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
     iterateanimationplayer(assets, Playerdata, playercurrentframe, playerlastframedirection, playeranimationindex);
 
     for (int i = 0; i < MAX_ENEMIES; i++) {
-        enemymovement(&enemies[i], Playerdata, enemyonblock, i);
+        enemymovement(&enemies[i], Playerdata, enemyonblock, i, assets);
         enemyanimations(&enemies[i], assets);
     }
     checkPlayerAttackCollision(Playerdata, enemies, *playerlastframedirection);
@@ -884,7 +884,7 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
     player->Position.x += dt * speed * player->direction.x;
     collisionplayerblocks('x', player, maxplatform, &facedirection);
 
-    if ((!player->onplatform||!player->onground) && (!player->attack) &!player->onshield) {  
+    if ((!player->onplatform||!player->onground) && (!player->attack) &&!player->onshield) {  
         player->isrunning = false;
         player->velocityY += gravity * dt;
 
@@ -896,14 +896,21 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
         }
     }
 
+    if (!player->isJumping && !player->onground && !player->onplatform) {
+        player->isfalling = true;
+        player->velocityY = 0;
+    }
     player->Position.y += player->velocityY * dt;
     collisionplayerblocks('y', player, maxplatform, &facedirection);
+    keepobjectwithinscreen(player, assets);
 
+    printf("DEBUG: isfalling=%d, animationstate=%d, velocityY=%.2f\n", 
+        player->isfalling, player->animationstate, player->velocityY);
     if (player->animationstate == 2) { // If currently in a jump animation, let it finish before changing state
         return facedirection;
     }
 
-    if ((player->onplatform||player->onground) && !player->attack && !player->onshield && !player->isJumping) {
+    if ((player->onplatform||player->onground) && !player->attack && !player->onshield && !player->isJumping && !player->isfalling) {
         if (IsKeyDown(KEY_A) || IsKeyDown(KEY_D)) 
         {
             if (IsKeyDown(KEY_A) && IsKeyDown(KEY_D)) //make sure that when both keys pressed at the same time character doesn't move
@@ -1005,6 +1012,7 @@ void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player
     int framescount = 0;
     int frametimer = 0;
     Texture2D texture;
+
 
     if (player->animationstate == 0) //idle
     {
@@ -1216,7 +1224,7 @@ int loadmap(const char* filename){
                             "0001000000100000",
                             "0000000000000000",                       
                             "0010000000001100",
-                            "2010000001000000",
+                            "2000000001000000",
                             "0000000000000000",
                             "0000000000000100",
                                 };
@@ -1362,8 +1370,8 @@ void randomenemypos(int* maxplatform, int enemyonblock[MAX_ENEMIES]){
 void initializeEnemy(struct Playerinfo* enemy, struct Playerinfo* block, int index, Texture2D texture) {
     *enemy = (struct Playerinfo){
         .Position = {block->rect.x + 10 + index * 20, block->rect.y - ((texture.height / 2) - 45) * 0.15},
-        .width = 100,
-        .height = 100,
+        .width = 105,
+        .height = 140,
         .attack = false,
         .dead = false,
         .isrunning = true,
@@ -1497,43 +1505,71 @@ void removeDeadEnemies(struct Playerinfo enemies[MAX_ENEMIES], int* enemyCount) 
 }
 
 //have to randomise their positions on blovksarray
-void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enemyonblock[MAX_ENEMIES], int enemyIndex){
+void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enemyonblock[MAX_ENEMIES], int enemyIndex, struct GameAssets* assets) {
     float dt = GetFrameTime();
     float speed = 50.0f;
+    float gravity = 800.0f;
 
-    if (fabs(enemy->Position.x - player->Position.x) <= 150 && !enemy->dead){
-        if (enemy->Position.y - player->Position.y <= 100 && enemy->Position.y - player->Position.y >= -100){
-            enemy->animationstate = 2; // Attack animation
+
+    if (!enemy->onplatform) {
+        enemy->velocityY += gravity * dt; 
+    } else {
+        enemy->velocityY = 0; 
+    }
+
+    enemy->Position.y += enemy->velocityY * dt;
+    Rectangle feetHitbox = {
+        enemy->Position.x + enemy->width * 0.2f, 
+        enemy->Position.y + enemy->height+10,  
+        enemy->width * 0.6f,                    
+        10                              
+    };
+
+    bool touchingPlatform = false;
+    for (int i = 0; i < *enemyonblock; i++) {
+        if (CheckCollisionRecs(feetHitbox, blocksarray[i].rect)) {
+            touchingPlatform = true;
+            enemy->Position.y = blocksarray[i].rect.y - enemy->height - feetHitbox.height; 
+            enemy->onplatform = true;
+            break;
+        }
+    }
+
+    if (!touchingPlatform) {
+        enemy->onplatform = false;
+    }
+
+    // Enemy AI logic
+    if (fabs(enemy->Position.x - player->Position.x) <= 150 && !enemy->dead) {
+        if (enemy->Position.y - player->Position.y <= 100 && enemy->Position.y - player->Position.y >= -100) {
+            enemy->animationstate = 2; 
             enemy->attack = true;
             speed = 0;
 
-            if (enemy->Position.x < player->Position.x){ //if enemy is on the left of player, turn right
+            if (enemy->Position.x < player->Position.x) { 
                 enemy->facedirection = 1;
             } else {
                 enemy->facedirection = -1;
             }
-
         } else {
-            enemy->animationstate = 1; // Walking animation
+            enemy->animationstate = 1;
             enemy->attack = false;
         }
-
     } else {
-        enemy->animationstate = 1; // Walking animation
+        enemy->animationstate = 1; 
         enemy->attack = false;
     }
 
-    if (!enemy->attack && !enemy->dead){
-        if (enemy->Position.x + enemy->width/2 <= blocksarray[enemyonblock[enemyIndex]].rect.x + 10){
+    if (!enemy->attack && !enemy->dead) {
+        if (enemy->Position.x + enemy->width / 2 <= blocksarray[enemyonblock[enemyIndex]].rect.x + 10) {
             enemy->facedirection = 1;
-        }
-        else if (enemy->Position.x + enemy->width/2 >= blocksarray[enemyonblock[enemyIndex]].rect.x + blocksarray[enemyonblock[enemyIndex]].rect.width){
+        } else if (enemy->Position.x + enemy->width / 2 >= blocksarray[enemyonblock[enemyIndex]].rect.x + blocksarray[enemyonblock[enemyIndex]].rect.width) {
             enemy->facedirection = -1;
         }
     }
 
-    if (enemy->dead){
-        if (enemy->animationindex > 5){
+    if (enemy->dead) {
+        if (enemy->animationindex > 5) {
             enemy->animationindex = 0;
         }
         enemy->animationstate = 3;
@@ -1542,15 +1578,21 @@ void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enem
 
     for (int i = 0; i < MAX_ENEMIES; i++) {
         if (enemy != &enemies[i] && !enemies[i].dead) {
-            if (CheckCollisionRecs((Rectangle){enemy->Position.x+5, enemy->Position.y, enemy->width - 10, enemy->height},
+            if (CheckCollisionRecs((Rectangle){enemy->Position.x + 5, enemy->Position.y, enemy->width - 10, enemy->height},
                                    (Rectangle){enemies[i].Position.x, enemies[i].Position.y, enemies[i].width, enemies[i].height})) {
                 speed = 0;
             }
         }
     }
 
-    //printf("%d", enemy->facedirection);
-    enemy->Position.x += dt * speed * (enemy->facedirection);
+    if (enemy->Position.y + enemy->height >= windheight - assets->texture[13].height * 0.7 - 8) {
+        enemy->Position.y = windheight - assets->texture[13].height * 0.7 - enemy->height - 8;
+        enemy->velocityY = 0;
+        enemy->isJumping = false;
+        enemy->isfalling = false;
+        enemy->onground = true;
+    }
+    enemy->Position.x += dt * speed * enemy->facedirection;
 }
 
 void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], int facedirection) {

@@ -46,7 +46,6 @@ struct Playerinfo
     //bool walking;
 };
 
-
 struct Playerinfo *blocksarray = NULL;
 
 void resizeimage(char direction, struct GameAssets* asset, int first, int last, float cropthreshold, int texturewidth, int textureheight){
@@ -398,9 +397,50 @@ void iterateanimationsprites(char animation, Texture2D texture, struct GameAsset
 
 }
 
+void iteratearrowanimation(int facedirection, Texture2D texture, struct GameAssets* assets, Vector2* arrowPos, float* arrowRotation, float speedX, float speedY, Vector2 enemypos, Rectangle rec) {
+    float dt = GetFrameTime();
+    static bool movedown = false;
+
+    Rectangle src = {1, 0, 361, texture.height};
+    Rectangle dst = {arrowPos->x, arrowPos->y, src.width / 3, src.height / 3 };
+    Vector2 origin = {dst.width / 2.0f, dst.height / 2.0f};
+    Rectangle arrowtip = {arrowPos->x + dst.width/2 - (*arrowRotation*0.45), arrowPos->y + (*arrowRotation*0.95), 4, 4}; // Adjust the size of the arrow tip 
+    
+    printf("Arrow Position: %.2f, %.2f, %.2f, %.2f\n", dst.x, dst.y, dst.width/2, dst.height/2);
+    printf("Arrow hitbox: %.2f, %.2f\n", arrowtip.x, arrowtip.y);
+
+    if (facedirection < 0) {
+        src.x += src.width;
+        src.width = -fabs(src.width);
+        dst.width = fabs(dst.width);
+        arrowtip.x = arrowPos->x - dst.width/2 + (*arrowRotation*0.45);
+        arrowtip.width = -fabs(arrowtip.width);
+        speedX = -fabs(speedX); 
+    }
+
+    if (facedirection >= 1 && arrowPos->x + dst.width/2 >= enemypos.x ||
+        facedirection < 0 && arrowPos->x - dst.width/2 <= enemypos.x) {
+        movedown = true;
+    }
+
+    if (CheckCollisionRecs(arrowtip, rec)) {
+        speedX = 0.0f;
+        speedY = 0.0f;
+        movedown = false;
+    }
+    arrowPos->x += speedX * dt;
+    if (movedown) {
+        *arrowRotation += 20*dt;
+        arrowPos->y += speedY * dt;
+    }
+
+    DrawRectangleRec(arrowtip, RED);
+    DrawTexturePro(texture, src, dst, origin, (*arrowRotation)*facedirection, WHITE);
+}
+
+
 int main()
 {
-
     InitWindow(windwidth, windheight, "Gravity game");
     InitAudioDevice();
 
@@ -408,65 +448,37 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("ori.png");
     assets.images[assets.imagecount++] = LoadImage("sos.png");
     assets.images[assets.imagecount++] = LoadImage("yellowhaircharass.png"); //2
+    assets.images[assets.imagecount++] = LoadImage("Enemies/arrow.png");
+
     assets.music[assets.musiccount++] = LoadMusicStream("13 Always With Me_ Spirited Away (Pi.mp3");
-
-    ImageFormat(&assets.images[0], PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-    SetWindowIcon(assets.images[0]); 
-
-    Texture2D mytexture = LoadTextureFromImage(assets.images[2]);
-    if (mytexture.id == 0) {
-        printf("Error: Texture failed to load!\n");
-    }
+    Texture2D texture1 = LoadTextureFromImage(assets.images[3]);
     
     PlayMusicStream(assets.music[0]);
     SetTargetFPS(60);
 
-    printf("**********%.2f*********\n\n", (assets.images[2].height));
-    struct Playerinfo Playerdata ={.Position = {500, (500)},
-                                   .width = mytexture.width,
-                                   .height = mytexture.height,
-                                   .isJumping = false,
-                                   //.walking = false
-                                  };
+    Vector2 enemyPos = {400, 400};
+    Vector2 arrowPos = {200, 375};
+    Vector2 arrowPosright = {800, 375};
 
-    int blockcount = loadmap("map.txt");
-    int playerlastframedirection = 1;
-    int currentFrame = 0;
-    int animationindex = 0;
-    assets.frameCount = 10;
-    printf("\n%d pixels", mytexture.width);
+    float speedX = 310.0f; 
+    float speedY = 190.0f; 
+    float arrowRotation = 0.0f; 
+    int facedirection = -1;
 
-    LoadAnimationData('i', &assets);
-
+    Rectangle groundrec = {900, 650, 100, 50};
+    Rectangle groundrec2 = {0, 650, 100, 50};
+    
     while (!WindowShouldClose())
     {
-        UpdateMusicStream(assets.music[0]);
         BeginDrawing();
         ClearBackground(RAYWHITE);
-        drawobstacles(&blockcount);
-        playerlastframedirection = calculatemovement(&Playerdata, &blockcount);
-        //printf("%d", playerlastframedirection); //check if lastframe player direction is really correct
+    
+        DrawCircleV(enemyPos, 50, RED);
+        DrawRectangleRec(groundrec, BLUE);
+        DrawRectangleRec(groundrec2, BLUE);
 
-        /*for (int i=0; i<9; i++){
-
-            
-            Rectangle sourceRect ={assets.src_jumpingx[i], assets.src_jumpingy[i], assets.src_jumpingwidth[i], assets.src_jumpingheight[i]};
-            Rectangle destRect = { ((i) * 120), 150, (sourceRect.width) / 4, sourceRect.height / 4 };
-            Vector2 origin = {0, 0};
-
-            // for flipping to left side
-            Rectangle sourceRect ={srcX_right[i], 810, -500, 500 };
-            Rectangle destRect = { ((i) * 150) + 100, 150, fabs(sourceRect.width) / 5, sourceRect.height / 5 };
-            Vector2 origin = {0, 0};
-
-            printf("%.2f, %.2f\n", sourceRect.x, destRect.x);
-            DrawTexturePro(mytexture, sourceRect, destRect, origin, 0, WHITE);
-        }*/
-
-
-        keepobjectwithinscreen(&Playerdata, assets.texturewalkright[0].width, assets.texturewalkright[0].height);
-        //DrawAnimation(&assets, &Playerdata,&currentFrame, &playerlastframedirection, 10, &animationindex);
-        iterateanimationsprites('i', mytexture, &assets, &Playerdata, &currentFrame, &playerlastframedirection, 4, &animationindex);
+        iteratearrowanimation(facedirection, texture1, &assets, &arrowPosright, &arrowRotation, speedX, speedY, enemyPos, groundrec2);
+    
         EndDrawing();
     }
 

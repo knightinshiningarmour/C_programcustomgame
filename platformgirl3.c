@@ -114,6 +114,9 @@ void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enem
 void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets);
 void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], int facedirection);
 void removeDeadEnemies(struct Playerinfo enemies[MAX_ENEMIES], int* enemyCount);
+void iteratearrowanimation(int facedirection, Texture2D texture, struct GameAssets* assets, Vector2* arrowPos, float* arrowRotation, 
+    float* speedX, float* speedY, Vector2 enemypos, Rectangle rec, Rectangle playerHitbox, int blockCount, 
+    struct Playerinfo* player, bool* arrowActive);
 void Unloadresources(struct GameAssets* assets);
 void aligntextcentre(int x, int y, int fontsize, const char* text, Color color);
 void shop(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic, int destx, int desty, int scalefactor);
@@ -129,6 +132,8 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
 void playerenemyhpbar(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], struct GameAssets* assets, int enemycount);
 void shopInteraction(struct Playerinfo* player, int* playerCurrency);
 void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic);
+
+
 
 void handleGameState(Gamestate* currentGameState, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
                         int* playerlastframedirection, int* playercurrentframe, int* playeranimationindex, int enemyonblock[MAX_ENEMIES], 
@@ -187,18 +192,6 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     *currentGameState = MENU;
     *currentmusic = -1; 
     *musicVolume = 0.5f;
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        enemies[i] = (struct Playerinfo){
-            .Position = {200 + i * 100, windheight - 240},
-            .width = 50,
-            .height = 50,
-            .currenthp = 75,
-            .hitpoints = 75,
-            .dead = false,
-            .animationstate = 0,
-            .facedirection = (i % 2 == 0) ? 1 : -1
-        };
-    }
     LoadAnimationDataplayer(assets);
 }
 
@@ -291,6 +284,24 @@ void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, G
         enemies[i].animationstate = 0; // Set to idle animation state
         enemies[i].facedirection = (i % 2 == 0) ? 1 : -1; // Alternate facing directions
         enemyanimations(&enemies[i], assets);
+    }
+
+    //reset back to the wanted position
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        enemies[i] = (struct Playerinfo){
+            .Position = {400 + i * 700, 700 - 700*i},
+            .width = 105,
+            .height = 140,
+            .attack = false,
+            .dead = false,
+            .isrunning = true,
+            .currentframe = 0,
+            .animationindex = 0,
+            .animationtimer = 0.0f,
+            .facedirection = -1,
+            .hitpoints = 75,
+            .deadtimer = 0.0f
+        };
     }
 }
 
@@ -461,6 +472,11 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
 {
     static float cointimer = 0.0f;
     float dt = GetFrameTime();
+    float speedX = 140.0f; 
+    float speedY = 30.0f; 
+    float arrowRotation = 0.0f; 
+    bool playerpostracked;
+
     cointimer += dt;
     if (cointimer >= 1.0f) {
         cointimer = 0.0f;
@@ -503,10 +519,35 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
     keepobjectwithinscreen(Playerdata, assets);
     iterateanimationplayer(assets, Playerdata, playercurrentframe, playerlastframedirection, playeranimationindex);
 
+    static bool arrowActive = false; 
+    static Vector2 arrowPos = {0, 0}; 
+    static int arrowFacedirection = 1;
+    Texture2D arrowtexture = assets->texture[18];
+    Rectangle ground = {0, windheight - assets->texture[13].height * 0.7, mapwidth, assets->texture[13].height * 0.7};
+    Rectangle playerHitbox = {Playerdata->Position.x, Playerdata->Position.y, Playerdata->width - 30, Playerdata->height};
+
     for (int i = 0; i < MAX_ENEMIES; i++) {
         enemymovement(&enemies[i], Playerdata, enemyonblock, i, assets);
         enemyanimations(&enemies[i], assets);
+
+        if (enemies[i].attack && enemies[i].animationindex == 9) { 
+            if (!arrowActive) {
+                arrowActive = true; 
+                if (enemies[i].facedirection > 0) {
+                    arrowPos = (Vector2){enemies[i].Position.x + enemies[i].width, enemies[i].Position.y + enemies[i].height / 2}; 
+                } else {
+                    arrowPos = (Vector2){enemies[i].Position.x, enemies[i].Position.y + enemies[i].height / 2}; // Reset arrow position
+                }
+                arrowFacedirection = enemies[i].facedirection; 
+            }
+        }
     }
+
+    if (arrowActive) {
+        iteratearrowanimation(arrowFacedirection, arrowtexture, assets, &arrowPos, &arrowRotation, &speedX, &speedY, 
+                            arrowPos, ground, playerHitbox, *blockcount, Playerdata, &arrowActive);
+    }
+    
     checkPlayerAttackCollision(Playerdata, enemies, *playerlastframedirection);
     removeDeadEnemies(enemies, enemycount);
     EndMode2D();
@@ -1400,6 +1441,7 @@ void keepobjectwithinscreen(struct Playerinfo* object, struct GameAssets* assets
     }
 }
 
+//mighht not need
 void randomenemypos(int* maxplatform, int enemyonblock[MAX_ENEMIES]){
     for (int i = 0; i < MAX_ENEMIES; i++) {
         int randomnum;
@@ -1419,22 +1461,7 @@ void randomenemypos(int* maxplatform, int enemyonblock[MAX_ENEMIES]){
     }
 }
 
-void initializeEnemy(struct Playerinfo* enemy, struct Playerinfo* block, int index, Texture2D texture) {
-    *enemy = (struct Playerinfo){
-        .Position = {block->rect.x + 10 + index * 20, block->rect.y - ((texture.height / 2) - 45) * 0.15},
-        .width = 105,
-        .height = 140,
-        .attack = false,
-        .dead = false,
-        .isrunning = true,
-        .currentframe = 0,
-        .animationindex = 0,
-        .animationtimer = 0.0f,
-        .facedirection = -1,
-        .hitpoints = 75,
-        .deadtimer = 0.0f
-    };
-}
+
 
 void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets){
     int framecount = 0;
@@ -1583,7 +1610,7 @@ void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enem
     }
 
 
-    if (fabs(enemy->Position.x - player->Position.x) <= 150 && !enemy->dead) {
+    if (fabs(enemy->Position.x - player->Position.x) <= 300 && !enemy->dead) {
         if (enemy->Position.y - player->Position.y <= 100 && enemy->Position.y - player->Position.y >= -100) {
             enemy->animationstate = 2; 
             enemy->attack = true;
@@ -1636,6 +1663,75 @@ void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enem
         enemy->onground = true;
     }
     enemy->Position.x += dt * speed * enemy->facedirection;
+}
+
+void iteratearrowanimation(int facedirection, Texture2D texture, struct GameAssets* assets, Vector2* arrowPos, float* arrowRotation, 
+    float* speedX, float* speedY, Vector2 enemypos, Rectangle rec, Rectangle playerHitbox, int blockCount, struct Playerinfo* player, bool* arrowActive) {
+    
+    float dt = GetFrameTime();
+    static bool arrowMovingDown = false; 
+    static float arrowtimer = 0.0f;
+    arrowtimer += dt;
+
+    if (!*arrowActive) {
+        arrowtimer = 0.0f; 
+        return;
+    }
+
+    if (arrowtimer >= 0.3f) {
+        arrowMovingDown = true; 
+    }
+
+    if (facedirection < 0){
+        *speedX = -fabs(*speedX); 
+    }
+    arrowPos->x += *speedX * dt;
+    if (arrowMovingDown) {
+        arrowPos->y += *speedY * dt;
+        *arrowRotation += 7 * arrowtimer;
+    }
+
+    Rectangle src = {1, 0, 361, texture.height};
+    Rectangle dst = {arrowPos->x, arrowPos->y, src.width / 3.5, src.height / 3.5};
+    Vector2 origin = {dst.width / 2.0f, dst.height / 2.0f};
+    Rectangle arrowtip = {arrowPos->x + dst.width / 2 - (*arrowRotation * 0.45), arrowPos->y + (*arrowRotation * 0.95), 4, 4};
+
+    if (facedirection < 0) {
+        src.x += src.width;
+        src.width = -fabs(src.width);
+        dst.width = fabs(dst.width);
+        arrowtip.x = arrowPos->x - dst.width / 2 + (*arrowRotation * 0.45);
+    }
+
+    for (int i = 0; i < blockCount; i++) {
+        if (CheckCollisionRecs(arrowtip, blocksarray[i].rect)) {
+            printf("Arrow collided with block %d\n", i);
+            *arrowActive = false; 
+            arrowMovingDown = false;
+            arrowtimer = 0.0f;
+            return;
+        }
+    }
+
+    // Check collision with the ground
+    if (CheckCollisionRecs(arrowtip, rec)) {
+        printf("Arrow collided with the ground.\n");
+        *arrowActive = false; 
+        arrowMovingDown = false;
+        arrowtimer = 0.0f;
+        return;
+    }
+
+    if (CheckCollisionRecs(arrowtip, playerHitbox)) {
+        printf("Arrow collided with the player.\n");
+        player->currenthp -= 10; 
+        *arrowActive = false; 
+        arrowtimer = 0.0f;
+        return;
+    }
+
+    DrawRectangleRec(arrowtip, RED);
+    DrawTexturePro(texture, src, dst, origin, (*arrowRotation) * facedirection, WHITE);
 }
 
 void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], int facedirection) {
@@ -1705,8 +1801,8 @@ void playerenemyhpbar(struct Playerinfo* player, struct Playerinfo enemies[MAX_E
         playerhpdest.x = windwidth - 170;
     }
 
-    printf("\nplayerposition: %.2f", player->Position.x);
-    printf("\nhpdest: %.2f", playerhpdest.x);
+    //printf("\nplayerposition: %.2f", player->Position.x);
+    //printf("\nhpdest: %.2f", playerhpdest.x);
     DrawTexturePro(assets->texture[21], playerhpsrc, playerhpdest, origin, 0, WHITE);
 }
 
@@ -1717,6 +1813,7 @@ int main()
     InitAudioDevice();
 
     struct GameAssets assets = {0};
+    {
     assets.images[assets.imagecount++] = LoadImage("Images/ori.png");
     assets.images[assets.imagecount++] = LoadImage("Images/tilecompleteset.png");
     assets.images[assets.imagecount++] = LoadImage("Images/Walking_KG_2.png"); //2
@@ -1791,7 +1888,8 @@ int main()
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[27]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[28]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[29]);
-
+    }
+    
     struct Playerinfo Playerdata;
     Camera2D camera = Camerasettings(&Playerdata);
     Gamestate currentGameState = MENU;
@@ -1804,9 +1902,7 @@ int main()
     float musicVolume;
     randomenemypos(&blockcount, enemyonblock);
     initializeGameState(&assets, &Playerdata, &currentGameState, &currentmusic, &musicVolume);
-    for (int i = 0; i < MAX_ENEMIES; i++) {
-        initializeEnemy(&enemies[i], &blocksarray[enemyonblock[i]], i, assets.texture[16]);
-    }
+
 
     while (!WindowShouldClose())
     {

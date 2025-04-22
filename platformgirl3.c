@@ -133,7 +133,7 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
 void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera, bool* gamedataloaded);
 void playerenemyhpbar(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], struct GameAssets* assets, int enemycount, Camera2D* camera);
 void shopInteraction(struct Playerinfo* player, int* playerCurrency);
-void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic);
+void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic, float* musicVolume);
 
 
 
@@ -168,7 +168,7 @@ void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, 
             handleInventorystate(assets, Playerdata, currentGameState, currentmusic, &musicVolume);
             break;
         case SHOP:
-            handleshopstate(assets, Playerdata, (int*)currentGameState, currentmusic);
+            handleshopstate(assets, Playerdata, (int*)currentGameState, currentmusic, &musicVolume);
             break;
         case PAUSE: 
             handlePauseState(assets, Playerdata, currentGameState, currentmusic, &musicVolume, enemycount, enemies, camera, &gamedataloaded);
@@ -501,8 +501,9 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
 
     if (*currentmusic != 0) { 
         StopMusicStream(assets->music[*currentmusic]);
-        PlayMusicStream(assets->music[0]);
         *currentmusic = 0;
+        PlayMusicStream(assets->music[*currentmusic]);
+        SetMusicVolume(assets->music[*currentmusic], *musicVolume);
     }
     BeginMode2D(*camera);
     if (!*gamedataloaded) {
@@ -606,7 +607,7 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
     DrawTexturePro(assets->texture[31], resumebuttonsrc, resumebuttondest, (Vector2){0, 0}, 0, WHITE);
 }
 
-void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic){
+void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic, float* musicVolume){
     Rectangle shopbgsrc = {0, 0, 1024, 1024};
     Rectangle shopbgdest = {0, 0, windwidth, windheight};
     Vector2 shopbgorigin = {0, 0};
@@ -627,11 +628,10 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
     DrawTexturePro(assets->texture[21], playerhpsrc, playerhpdest, (Vector2){0, 0}, 0.0f, WHITE);
     aligntextcentre(shopbackbuttondest.x + shopbackbuttondest.width / 2, shopbackbuttondest.y + shopbackbuttondest.height / 2, 30, "Back", BLACK);
     if (*currentmusic != 2) { 
-        float shopmusicVolume = 1.0f;
         *currentmusic = 2;
         StopMusicStream(assets->music[*currentmusic]);
         PlayMusicStream(assets->music[2]);
-        SetMusicVolume(assets->music[*currentmusic], shopmusicVolume);
+        SetMusicVolume(assets->music[*currentmusic], *musicVolume * 2);
     }
 
     for (int i=0; i<4; i++){

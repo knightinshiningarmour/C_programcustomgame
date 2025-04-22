@@ -15,6 +15,8 @@ struct GameAssets
     AudioStream audio[10];
     Texture2D texturewalkleft[20];
     Texture2D texturewalkright[20];
+    Texture2D texture[20];
+
     float src_idlex[5];
     float src_idley[5];
     float src_runningx[7];
@@ -28,6 +30,7 @@ struct GameAssets
     float frameSpeed; 
     int texturewalkrightcount;
     int texturewalkleftcount;  
+    int texturecount;
     int imagecount;
     int musiccount;
     int audiocount;
@@ -438,6 +441,74 @@ void iteratearrowanimation(int facedirection, Texture2D texture, struct GameAsse
     DrawTexturePro(texture, src, dst, origin, (*arrowRotation)*facedirection, WHITE);
 }
 
+void drawshop (struct GameAssets* assets){
+    Rectangle shopbgsrc = {0, 0, 1024, 1024};
+    Rectangle shopbgdest = {0, 0, windwidth, windheight};
+    Rectangle shopInventorysrc = {36, 62, 652, 290};
+    Rectangle shopInventorydest = {100, 150, 1000, 600};
+    Rectangle potionspos[4];
+    int potionbought[4];
+    int potionindexbought[4][1];
+
+    float potiontexturewidth = assets->texture[6].width / 4;
+    DrawTexturePro(assets->texture[4], shopbgsrc, shopbgdest, (Vector2){0, 0}, 0.0f, WHITE);
+    DrawTexturePro(assets->texture[5], shopInventorysrc, shopInventorydest, (Vector2){0, 0}, 0.0f, WHITE);   
+
+    for (int i=0; i<4; i++){
+        Rectangle potionsrc = {0 + (i * potiontexturewidth), 0, potiontexturewidth, assets->texture[6].height/2};
+        Rectangle potionsdest = {448 + (i * potionsrc.width/6), 220, potionsrc.width/8 - 3, potionsrc.height/8};
+        potionspos[i] = (Rectangle){potionsdest.x, potionsdest.y, potionsdest.width, potionsdest.height};
+        DrawTexturePro(assets->texture[6], potionsrc, potionsdest, (Vector2){0, 0}, 0.0f, WHITE);
+    }
+
+    Vector2 mousePos = GetMousePosition();
+    for (int i=0; i<4; i++){
+        if (CheckCollisionPointRec(mousePos, potionspos[i])){
+            DrawRectangleRec(potionspos[i], (Color){255, 255, 255, 100});
+            if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
+                printf("Potion %d clicked!\n", i+1);
+                potionindexbought[i][potionbought[0]++];
+            }
+        }
+    }
+
+
+}
+
+void drawplayerinven(struct GameAssets* assets, float timelapse){
+    Vector2 mousePos = GetMousePosition();
+    Rectangle playerinvensrc = {0, 0, assets->texture[7].width, assets->texture[7].height};
+    Rectangle invenbg = {3740, 3695, 582, 180};
+    Rectangle invenbgdest = {100, 50, 1000, 300};
+    Rectangle playeridlesrc = {21, 0, 50, assets->texture[9].height};
+    Rectangle playeridledest = {50, 400, 250, 300};
+    Rectangle homebuttonsrc = {53, 30, 110, 103};
+    Rectangle homebuttondest = {1000, 40, 100, 90};
+    if (CheckCollisionPointRec(mousePos, homebuttondest)){
+        homebuttonsrc.x = 173;
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
+            printf("Home button clicked!\n");
+        }
+    }
+
+    DrawTexturePro(assets->texture[10], homebuttonsrc, homebuttondest, (Vector2){0, 0}, 0.0f, WHITE);
+    DrawTexturePro(assets->texture[8], invenbg, invenbgdest, (Vector2){0, 0}, 0.0f, WHITE);
+    DrawTexturePro(assets->texture[9], playeridlesrc, playeridledest, (Vector2){0, 0}, 0.0f, WHITE);
+    DrawText("Inventory", 435, invenbgdest.y + 20, 70, BLUE);
+       
+
+    int y = 0;
+    for (int i=0; i<12; i++){
+        int x = i % 4;
+        if (i%4 == 0 && i != 0){
+            y++;
+        }
+        Rectangle playerinvendest = {400 + (x * 100), 200 + (y * 100), 98, 98};
+        DrawTexturePro(assets->texture[7], playerinvensrc, playerinvendest, (Vector2){0, 0}, 0.0f, WHITE);
+    }
+
+}
+
 
 int main()
 {
@@ -449,36 +520,40 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("sos.png");
     assets.images[assets.imagecount++] = LoadImage("yellowhaircharass.png"); //2
     assets.images[assets.imagecount++] = LoadImage("Enemies/arrow.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/shopbg.png"); //4
+    assets.images[assets.imagecount++] = LoadImage("Images/shopinventory.png"); //5
+    assets.images[assets.imagecount++] = LoadImage("Images/potions.png"); //6
+    assets.images[assets.imagecount++] = LoadImage("Images/playerinventory.png"); //7
+    assets.images[assets.imagecount++] = LoadImage("Images/inventorybg.png"); //8
+    assets.images[assets.imagecount++] = LoadImage("Images/Idle_KG_2.png"); //9
+    assets.images[assets.imagecount++] = LoadImage("Images/buttons.png"); //10
+
 
     assets.music[assets.musiccount++] = LoadMusicStream("13 Always With Me_ Spirited Away (Pi.mp3");
-    Texture2D texture1 = LoadTextureFromImage(assets.images[3]);
-    
-    PlayMusicStream(assets.music[0]);
-    SetTargetFPS(60);
 
-    Vector2 enemyPos = {400, 400};
-    Vector2 arrowPos = {200, 375};
-    Vector2 arrowPosright = {800, 375};
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[0]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[1]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[2]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[3]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[4]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[5]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[6]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[7]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[8]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[9]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[10]);
 
-    float speedX = 310.0f; 
-    float speedY = 190.0f; 
-    float arrowRotation = 0.0f; 
-    int facedirection = -1;
-
-    Rectangle groundrec = {900, 650, 100, 50};
-    Rectangle groundrec2 = {0, 650, 100, 50};
     
     while (!WindowShouldClose())
     {
+        float dt = GetFrameTime();
+        float timelapse;
+        timelapse += dt;
+
         BeginDrawing();
         ClearBackground(RAYWHITE);
-    
-        DrawCircleV(enemyPos, 50, RED);
-        DrawRectangleRec(groundrec, BLUE);
-        DrawRectangleRec(groundrec2, BLUE);
-
-        iteratearrowanimation(facedirection, texture1, &assets, &arrowPosright, &arrowRotation, speedX, speedY, enemyPos, groundrec2);
-    
+        //drawshop(&assets);
+        drawplayerinven(&assets, timelapse);
         EndDrawing();
     }
 

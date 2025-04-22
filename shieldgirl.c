@@ -1711,3 +1711,98 @@ int main()
     CloseWindow();
     return 0;
 }
+
+
+
+
+
+void iteratearrowanimation(int facedirection, Texture2D texture, struct GameAssets* assets, Vector2* arrowPos,
+    Vector2 enemypos, Rectangle rec, Rectangle playerHitbox, int blockCount, struct Playerinfo* player, bool* arrowActive) {
+
+float dt = GetFrameTime();
+static bool arrowMovingDown = false; 
+static bool arrowonground = false;
+static float arrowongroundtimer = 0.0f;
+static float arrowtimer = 0.0f;
+static float speedX = 140.0f; 
+static float speedY = 30.0f; 
+static float arrowRotation = 0.0f;
+arrowtimer += dt;
+
+if (!*arrowActive) {
+arrowtimer = 0.0f; 
+return;
+}
+
+if (arrowtimer >= 0.3f) {
+arrowMovingDown = true; 
+}
+
+if (facedirection < 0){
+speedX = -fabs(speedX); 
+}
+arrowPos->x += speedX * dt;
+if (arrowMovingDown && !arrowonground){
+arrowPos->y += speedY * dt;
+arrowRotation += arrowtimer * 0.2;
+} 
+
+
+Rectangle src = {1, 0, 361, texture.height};
+Rectangle dst = {arrowPos->x, arrowPos->y, src.width / 3.5, src.height / 3.5};
+Vector2 origin = {dst.width / 2.0f, dst.height / 2.0f};
+Rectangle arrowtip = {arrowPos->x + dst.width / 2 - (arrowRotation * 0.45), arrowPos->y + (arrowRotation * 0.75), 4, 4}; //to offset the arrowtip hitbox
+
+if (facedirection < 0) {
+src.x += src.width;
+src.width = -fabs(src.width);
+dst.width = fabs(dst.width);
+arrowtip.x = arrowPos->x - dst.width / 2 + (arrowRotation * 0.45);
+}
+
+for (int i = 0; i < blockCount; i++) {
+if (CheckCollisionRecs(arrowtip, blocksarray[i].rect)) {
+printf("Arrow collided with block %d\n", i);
+*arrowActive = false; 
+arrowMovingDown = false;
+arrowtimer = 0.0f;
+return;
+}
+}
+
+// Check collision with the ground
+if (CheckCollisionRecs(arrowtip, rec)) {
+printf("Arrow collided with the ground.\n");
+speedX = 0.0f;
+speedY = 0.0f;
+arrowMovingDown = false;
+arrowonground = true;
+
+arrowongroundtimer += dt;
+if (arrowongroundtimer >= 3.0f){
+*arrowActive = false;
+arrowongroundtimer = 0.0f; 
+arrowtimer = 0.0f;
+speedX = 140.0f;
+speedY = 30.0f;
+arrowRotation = 0.0f;
+arrowonground = false;
+return;
+}
+}
+
+if (CheckCollisionRecs(arrowtip, playerHitbox)) {
+printf("Arrow collided with the player.\n");
+player->currenthp -= 10; 
+*arrowActive = false; 
+arrowtimer = 0.0f;
+speedX = 140.0f;
+speedY = 30.0f;
+arrowRotation = 0.0f;
+arrowonground = false;
+return;
+}
+
+DrawRectangleRec(arrowtip, RED);
+DrawTexturePro(texture, src, dst, origin, (arrowRotation) * facedirection, WHITE);
+}

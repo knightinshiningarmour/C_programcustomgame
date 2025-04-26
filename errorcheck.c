@@ -51,6 +51,10 @@ struct Playerinfo
 
 struct Playerinfo *blocksarray = NULL;
 
+void aligntextcentre(int x, int y, int fontsize, const char* text, Color color);
+
+
+
 void resizeimage(char direction, struct GameAssets* asset, int first, int last, float cropthreshold, int texturewidth, int textureheight){
     for (int i = first; i <= last; i++) {
         ImageAlphaCrop(&asset->images[i], cropthreshold); 
@@ -446,13 +450,39 @@ void drawshop (struct GameAssets* assets){
     Rectangle shopbgdest = {0, 0, windwidth, windheight};
     Rectangle shopInventorysrc = {36, 62, 652, 290};
     Rectangle shopInventorydest = {100, 150, 1000, 600};
+    Rectangle shopinvenextsrc = {33, 92, 100, 264};
+    Rectangle shopinvenextdest = {shopInventorydest.x-57, shopInventorydest.y+62, shopInventorydest.width*0.1, 538};
     Rectangle potionspos[4];
     int potionbought[4];
     int potionindexbought[4][1];
+    Color potioncolor[4] = {RED, GREEN, BLUE, GOLD};
+    char potiondesc[16][100] = {
+        "Crimson Elixir",
+        "Brewed from ember petals",
+        "Restores +30 health",
+        "\"Feel the burn, heal fast!\"",
+    
+        "Verdant Tonic",
+        "Forest herbs & zest",
+        "+Jump height x1.5 (30s)",
+        "\"Run like wind, strike fast!\"",
+    
+        "Sapphire Draught",
+        "Moonwater and starroot",
+        "+30 damage boost",
+        "\"Clarity, focus, magic.\"",
+    
+        "Golden Bulwark",
+        "Dragon scales with gold",
+        "+30 defense",
+        "\"Will forged in gold stays\""
+    };
+    
 
     float potiontexturewidth = assets->texture[6].width / 4;
     DrawTexturePro(assets->texture[4], shopbgsrc, shopbgdest, (Vector2){0, 0}, 0.0f, WHITE);
-    DrawTexturePro(assets->texture[5], shopInventorysrc, shopInventorydest, (Vector2){0, 0}, 0.0f, WHITE);   
+    DrawTexturePro(assets->texture[5], shopInventorysrc, shopInventorydest, (Vector2){0, 0}, 0.0f, WHITE); 
+    DrawTexturePro(assets->texture[5], shopinvenextsrc, shopinvenextdest, (Vector2){0, 0}, 0.0f, WHITE);  
 
     for (int i=0; i<4; i++){
         Rectangle potionsrc = {0 + (i * potiontexturewidth), 0, potiontexturewidth, assets->texture[6].height/2};
@@ -462,9 +492,23 @@ void drawshop (struct GameAssets* assets){
     }
 
     Vector2 mousePos = GetMousePosition();
+    Rectangle descriptionrecdest = {75, 300, 315, 400}; // Move out of loop
+    int lineHeight = descriptionrecdest.height / 5;
+    printf("\n%.2f, %.2f", mousePos.x, mousePos.y);
     for (int i=0; i<4; i++){
         if (CheckCollisionPointRec(mousePos, potionspos[i])){
             DrawRectangleRec(potionspos[i], (Color){255, 255, 255, 100});
+            //DrawRectangleRec((Rectangle){}, YELLOW);
+            for (int j=0; j<4; j++){
+                int descIndex = i * 4 + j;
+                int lineY = descriptionrecdest.y + j * lineHeight;
+                if (descIndex % 4 == 0){
+                    DrawRectangleRec((Rectangle){65, 270, 325, 60}, (Color){255, 255, 206, 100});
+                    aligntextcentre(descriptionrecdest.x + descriptionrecdest.width/2, lineY, 35, potiondesc[descIndex], potioncolor[i]);
+                }else{
+                    aligntextcentre(descriptionrecdest.x + descriptionrecdest.width/2, lineY, 24, potiondesc[descIndex], ORANGE);
+                }
+            }
             if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
                 printf("Potion %d clicked!\n", i+1);
                 potionindexbought[i][potionbought[0]++];
@@ -472,7 +516,11 @@ void drawshop (struct GameAssets* assets){
         }
     }
 
+}
 
+void aligntextcentre(int x, int y, int fontsize, const char* text, Color color) {
+    int textWidth = MeasureText(text, fontsize);
+    DrawText(text, x - textWidth / 2, y - fontsize/2, fontsize, color);
 }
 
 void drawplayerinven(struct GameAssets* assets, float timelapse){
@@ -483,7 +531,15 @@ void drawplayerinven(struct GameAssets* assets, float timelapse){
     Rectangle playeridlesrc = {21, 0, 50, assets->texture[9].height};
     Rectangle playeridledest = {50, 400, 250, 300};
     Rectangle homebuttonsrc = {53, 30, 110, 103};
-    Rectangle homebuttondest = {1000, 40, 100, 90};
+    Rectangle homebuttondest = {1040, 40, 110, 100};
+    Rectangle invenvbordersrc = {16, 14, 482, 486};
+    Rectangle invenborderdest = {376, 220, 447, 336};
+    Rectangle rocksrc = {33, 29, 33, 19};
+    Rectangle rockdest = {60, 699, 220, 100};
+
+    ClearBackground((Color){206, 250, 255, 0});
+    DrawTexturePro(assets->texture[11], invenvbordersrc, invenborderdest, (Vector2){0,0}, 0, WHITE);
+    DrawTexturePro(assets->texture[12], rocksrc, rockdest, (Vector2){0,0}, 0, WHITE);
     if (CheckCollisionPointRec(mousePos, homebuttondest)){
         homebuttonsrc.x = 173;
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
@@ -495,6 +551,7 @@ void drawplayerinven(struct GameAssets* assets, float timelapse){
     DrawTexturePro(assets->texture[8], invenbg, invenbgdest, (Vector2){0, 0}, 0.0f, WHITE);
     DrawTexturePro(assets->texture[9], playeridlesrc, playeridledest, (Vector2){0, 0}, 0.0f, WHITE);
     DrawText("Inventory", 435, invenbgdest.y + 20, 70, BLUE);
+    printf("%.2f, %.2f\n", mousePos.x, mousePos.y);
        
 
     int y = 0;
@@ -503,7 +560,7 @@ void drawplayerinven(struct GameAssets* assets, float timelapse){
         if (i%4 == 0 && i != 0){
             y++;
         }
-        Rectangle playerinvendest = {400 + (x * 100), 200 + (y * 100), 98, 98};
+        Rectangle playerinvendest = {invenborderdest.x + 24 + (x * 100), invenborderdest.y + 18 + (y * 100), 100, 100};
         DrawTexturePro(assets->texture[7], playerinvensrc, playerinvendest, (Vector2){0, 0}, 0.0f, WHITE);
     }
 
@@ -524,9 +581,11 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("Images/shopinventory.png"); //5
     assets.images[assets.imagecount++] = LoadImage("Images/potions.png"); //6
     assets.images[assets.imagecount++] = LoadImage("Images/playerinventory.png"); //7
-    assets.images[assets.imagecount++] = LoadImage("Images/inventorybg.png"); //8
+    assets.images[assets.imagecount++] = LoadImage("Images/inventorytitle.png"); //8
     assets.images[assets.imagecount++] = LoadImage("Images/Idle_KG_2.png"); //9
     assets.images[assets.imagecount++] = LoadImage("Images/buttons.png"); //10
+    assets.images[assets.imagecount++] = LoadImage("Images/inventoryborder.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/background.png");
 
 
     assets.music[assets.musiccount++] = LoadMusicStream("13 Always With Me_ Spirited Away (Pi.mp3");
@@ -542,7 +601,8 @@ int main()
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[8]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[9]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[10]);
-
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[11]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[12]);
     
     while (!WindowShouldClose())
     {

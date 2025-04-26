@@ -1,22 +1,23 @@
-PlayerPositionX=132.98
-PlayerPositionY=250.00
-PlayerHealth=90
+PlayerPositionX=300.00
+PlayerPositionY=300.00
+PlayerHealth=100
 PlayerMaxHealth=100
-PlayerCurrency=88
-MusicVolume=1.00
-EnemyCount=3
-Enemy0PositionX=44.55
-Enemy0PositionY=562.40
-Enemy0Health=75
-Enemy0Dead=0
-Enemy1PositionX=410.73
-Enemy1PositionY=562.40
-Enemy1Health=34
-Enemy1Dead=0
-Enemy2PositionX=980.18
-Enemy2PositionY=562.40
-Enemy2Health=75
-Enemy2Dead=0
+Playerattackdamage=2
+PlayerCurrency=454
+MusicVolume=0.55
+EnemyCount=0
 CameraTargetX=600.00
-CameraTargetY=300.00
+CameraTargetY=350.00
 CameraZoom=1.00
+Potion 1 price: 150
+Potion 1 bought: 1
+Potion 1 remaining: 2
+Potion 2 price: 80
+Potion 2 bought: 0
+Potion 2 remaining: 5
+Potion 3 price: 100
+Potion 3 bought: 1
+Potion 3 remaining: 3
+Potion 4 price: 100
+Potion 4 bought: 0
+Potion 4 remaining: 5

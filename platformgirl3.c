@@ -16,6 +16,13 @@ const int windheight = 800;
 const int mapwidth = windwidth * 3;
 const int mapheight = -windheight * 5;
 
+typedef enum{
+    ITEM_NONE,
+    KEY,
+    ARMOR,
+    SWORD
+}ItemType;
+
 struct GameAssets 
 { //store game assets
     Image images[50];
@@ -48,6 +55,8 @@ struct GameAssets
     int soundcount;
     int potionleftinshop[4];
     int potionprice[4];
+    int shopkeycount;
+    int shopkeyprice;
 
     int coincurrentframe;
     int coinindex;
@@ -94,6 +103,9 @@ struct Playerinfo
 
     int potionbought[4];
     int potionorder[4];
+    int inventoryrow2n3available[2][4];
+    int row2n3invencount;
+    int rowspacing;
     int potioncount;
     int activepotiontype;
     int playerdefense;
@@ -103,6 +115,8 @@ struct Playerinfo
     bool jumpboostactivated;
     bool attackboostshdact;
     float potioneffect;
+
+    int keycount;
 };
 
 struct ShopItem {
@@ -143,6 +157,7 @@ typedef struct Arrow{
     float reflectedtimer;
 }Arrow;
 
+
 struct Playerinfo *blocksarray = NULL;
 struct Playerinfo enemies[MAX_ENEMIES];
 Arrow arrows[MAX_ARROWS];
@@ -178,6 +193,8 @@ void playerenemyhpbar(struct Playerinfo* player, struct Playerinfo enemies[MAX_E
 void shopInteraction(struct Playerinfo* player, int* playerCurrency);
 void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic, float* musicVolume);
 void shopstateanimation(struct GameAssets* assets);
+void drawInventory2n3row(struct GameAssets* assets, struct Playerinfo* player, Rectangle playerinvenboxes[12]);
+void addItemToInventory(struct Playerinfo* player, ItemType itemType);
 
 
 void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
@@ -218,8 +235,9 @@ void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, 
             break;
         case GAMEOVER:
             DrawText("Game Over. Press ENTER to Restart", windwidth / 2 - 150, windheight / 2, 20, BLACK);
-            if (IsKeyPressed(KEY_ENTER))
-            {*currentGameState = MENU;}
+            if (IsKeyPressed(KEY_ENTER)){
+                *currentGameState = MENU;
+            }
             break;
     }
 }
@@ -244,6 +262,9 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->potioncount = 0;
     Playerdata->potioneffect = 0.0f;
     Playerdata->activepotiontype = -1;
+    Playerdata->keycount = 0;
+    assets->shopkeycount = 1;
+    assets->shopkeyprice = 500;
 
     Playerdata->jumpboost = -700.0f; //jump
     Playerdata->jumpboostshdact = false;
@@ -254,6 +275,14 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     for (int i = 0; i<4; i++){
         Playerdata->potionbought[i] = 0;
         Playerdata->potionorder[i] = 0;
+        Playerdata->row2n3invencount = 0;
+        Playerdata->rowspacing = 0;
+
+        if (i < 2){
+            for (int j = 0; j < 4; j++){
+                Playerdata->inventoryrow2n3available[i][j] = 0;
+            }
+        }
     }
     *currentGameState = MENU;
     *currentmusic = -1; 
@@ -676,7 +705,6 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
         playerHitbox.x += 40;
     }
 
-
     for (int i = 0; i < MAX_ENEMIES; i++) {
         enemymovement(&enemies[i], Playerdata, enemyonblock, i, assets);
         enemyanimations(&enemies[i], assets, enemies[i].enemywithcoin[i], enemies[i].enemywithkey[i], Playerdata);
@@ -817,7 +845,7 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
     DrawTexturePro(assets->texture[34], invenbg, invenbgdest, (Vector2){0, 0}, 0.0f, WHITE);
     DrawTexturePro(assets->texture[1], playeridlesrc, playeridledest, (Vector2){0, 0}, 0.0f, WHITE);
     DrawText("Inventory", 435, invenbgdest.y + 20, 70, BLUE);
-    //printf("%.2f, %.2f\n", mousepos.x, mousepos.y);
+    printf("%.2f, %.2f\n", mousepos.x, mousepos.y);
     DrawTexturePro(assets->texture[31], settingsbuttonsrc, settingsbuttondest, (Vector2){0, 0}, 0, WHITE);
     DrawTexturePro(assets->texture[31], resumebuttonsrc, resumebuttondest, (Vector2){0, 0}, 0, WHITE); 
 
@@ -831,7 +859,7 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
         DrawTexturePro(assets->texture[30], playerinvensrc, playerinvendest, (Vector2){0, 0}, 0.0f, WHITE);
         playerinvenboxes[i] = playerinvendest;
     
-        if (i < player->potioncount) {
+        if (i < player->potioncount){
             int potiontype = player->potionorder[i];
             if (player->potionbought[potiontype] > 0) {
                 potionavailable[potiontype] = true;
@@ -844,15 +872,30 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
             }
         }
     }
+    drawInventory2n3row(assets, player, playerinvenboxes);
 
     DrawRectangleLinesEx(hoverborderdest, 3, GOLD);
     char potiondesc[4][30] = {"Heal 30Hp", "Jump Height x1.5 for 20s", "+10 damage for 20s", "+5 defense for 20s"};
     int potionnum = (hoverborderdest.x - 401) / 100;
 
+    if (hoverborderdest.y >= 369 && hoverborderdest.y <= 468){
+        if (player->inventoryrow2n3available[0][potionnum] == 1){
+            aligntextcentre(900, 600, 30, "Key. Collect this to unlock the", BLUE);
+            aligntextcentre(900, 640, 30, "door located at the Eastern. ", BLUE);
+        }else if (player->inventoryrow2n3available[0][potionnum] == 2){
+            aligntextcentre(900, 600, 30, "Plated Armour. Wear this to", BLUE);
+            aligntextcentre(900, 640, 30, "triumph in battles. ", BLUE);
+        }else if (player->inventoryrow2n3available[0][potionnum] == 3){
+            aligntextcentre(900, 600, 30, "Sharpened Sword. Believed to be", BLUE);
+            aligntextcentre(900, 640, 30, "made by the strongest blacksmith. ", BLUE);
+        }
+    }
     if (potionnum < player->potioncount) {
         int type = player->potionorder[potionnum];
         if (player->potionbought[type] != 0) {
-            aligntextcentre(1000, 600, 30, potiondesc[type], BLUE);
+            if (hoverborderdest.y < 270){
+                aligntextcentre(1000, 600, 30, potiondesc[type], BLUE);
+            }
             if (IsKeyPressed(KEY_ENTER) && !potionuseconfirmation) {
                 potionuseconfirmation = true;
                 secondenter = false;
@@ -960,6 +1003,8 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
     Rectangle playerhpsrc = {337 - (48 * ((100 - player->currenthp)/7)), 1, 46, 14};
     Rectangle playerhpdest = {50, 50, 200, 70};
     Rectangle descriptionrecdest = {65, 325, 325, 470};
+    Rectangle keysrc = {0, 0, assets->texture[36].width, assets->texture[36].height};
+    Rectangle keydest = {450, 325, 50, 40};
 
     //static int potionindexbought[4];
     //int potioncount;
@@ -1009,6 +1054,33 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
         Rectangle potionsdest = {448 + (i * potionsrc.width/6), 205, potionsrc.width/8 - 5, potionsrc.height/8};
         potionspos[i] = (Rectangle){potionsdest.x, potionsdest.y, potionsdest.width, potionsdest.height};
         DrawTexturePro(assets->texture[29], potionsrc, potionsdest, (Vector2){0, 0}, 0.0f, WHITE);
+    }
+   
+    DrawTexturePro(assets->texture[36], keysrc, keydest, (Vector2){0, 0}, 0.0f, WHITE);
+    if (assets->shopkeycount != 0){
+        sprintf(potionleft, "x%d", assets->shopkeycount);
+        DrawRectangleRec((Rectangle){460, 365, 40, 30}, (Color){255, 255, 153, 120});
+        DrawText(potionleft, 470, 365, 30, BLACK);
+    }else{
+        Vector2 soldtextpos = {keydest.x + keydest.width / 2, keydest.y + keydest.height / 2};
+        DrawRectangleRec((Rectangle){439, 306, 70, 87}, (Color){180, 180, 180, 180});
+        rotatetextcentre("SOLD OUT", soldtextpos, 20, -45, WHITE);
+    }
+    if (mousePos.x >= keydest.x && mousePos.x <= keydest.x + keydest.width
+        && mousePos.y >= keydest.y && mousePos.y <= keydest.y + keydest.height){
+        DrawRectangleRec(keydest, (Color){255, 255, 255, 80});
+        aligntextcentre(descriptionrecdest.x + descriptionrecdest.width/2, 450, 50, "Key", PURPLE);
+        
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
+            if (player->currency >= assets->shopkeyprice){
+                player->keycount++;
+                addItemToInventory(player, 1);
+                player->currency -= assets->shopkeyprice;
+                assets->shopkeycount--;
+            }else{
+                notenufmoney = true;
+            }
+        }
     }
 
     for (int i=0; i<4; i++){
@@ -1295,6 +1367,76 @@ void shop(struct GameAssets* assets, struct Playerinfo* player, int* currentGame
         if (IsKeyPressed(KEY_E)) {
             *currentGameState = SHOP; 
             *currentmusic = 1;
+        }
+    }
+}
+
+void addItemToInventory(struct Playerinfo* player, ItemType itemType){
+    for (int row = 0; row < 2; row++) {
+        for (int col = 0; col < 4; col++) {
+            if (player->inventoryrow2n3available[row][col] == itemType) {
+                if (itemType == KEY) {
+                    player->keycount++;
+                } 
+                return;
+            }
+        }
+    }
+
+    if (player->rowspacing >= 2) {
+        printf("Inventory is full! Cannot add more items.\n");
+        return;
+    }
+
+    // Add item to the current slot
+    player->inventoryrow2n3available[player->rowspacing][player->row2n3invencount] = itemType;
+    player->row2n3invencount++;
+
+    // Move to the next row if the current row is full
+    if (player->row2n3invencount >= 4) {
+        player->row2n3invencount = 0;
+        player->rowspacing++;
+    }
+}
+
+void drawInventory2n3row(struct GameAssets* assets, struct Playerinfo* player, Rectangle playerinvenboxes[12]) {
+    int y = 0; 
+    int startIndex = 5; 
+    char keyCountText[10];
+
+    for (int i = 4; i < 12; i++) {
+        int x = i % 4; 
+        if (i % 4 == 0 && i != 0){
+            y++; 
+        }
+        Rectangle slotRect = playerinvenboxes[i];
+
+        switch (player->inventoryrow2n3available[y-1][x]){
+            case KEY:
+                Rectangle keysrc = {0, 0, assets->texture[36].width, assets->texture[36].height};
+                Rectangle keydest = {slotRect.x + 20, slotRect.y + 20, 65, 45};
+                DrawTexturePro(assets->texture[36], keysrc, keydest, (Vector2){0, 0}, 0.0f, WHITE);
+                break;
+            case ARMOR:
+                break;
+            case SWORD:
+                break;
+            default:
+                break;
+        }
+
+                //20,10,60,80
+        switch (player->inventoryrow2n3available[y-1][x]){
+            case KEY:
+                sprintf(keyCountText, "x%d", player->keycount);
+                DrawText(keyCountText, slotRect.x + 55, slotRect.y + 60, 40, BLACK);
+                break;
+            case ARMOR:
+                break;
+            case SWORD:
+                break;
+            default:
+                break;
         }
     }
 }
@@ -1927,6 +2069,12 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
             fprintf(file, "Potion %d bought: %d\n", i+1, Playerdata->potionbought[i]);
             fprintf(file, "Potion %d remaining: %d\n", i+1, assets->potionleftinshop[i]);
         }
+
+        for (int i = 2; i<=3; i++){
+            for (int j = 0; j < 4; j++){
+                fprintf(file, "Playerinvenrow%d[%d]=%d\n", i, j, Playerdata->inventoryrow2n3available[i-2][j]);
+            }
+        }
         fprintf(file, "Jumpboostactive=%d\n", Playerdata->jumpboostshdact);
         fprintf(file, "Attackboostactive=%d\n", Playerdata->attackboostshdact);
         fprintf(file, "Defenseboostactive=%d\n", Playerdata->defenseboostshdact);
@@ -1937,6 +2085,8 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
         }
         fprintf(file, "Potioneffecttimer=%.2f\n", Playerdata->potioneffect); 
         fprintf(file, "Potionactivetype=%d\n", Playerdata->activepotiontype);
+        fprintf(file, "Numberofkeys=%d\n", Playerdata->keycount);
+        fprintf(file, "Shopkeycount=%d\n", assets->shopkeycount);
 
         fclose(file);
     }
@@ -2015,6 +2165,16 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
                 sscanf(line, "Potion %d remaining: %d", &i, &assets->potionleftinshop[i]);
             }
         }
+
+        for (int i = 2; i<=3; i++){
+            for (int j = 0; j < 4; j++){
+                char inventoryKey[30];
+                sprintf(inventoryKey, "Playerinvenrow%d[%d]", i, j);
+                if (strstr(line, inventoryKey)){
+                    sscanf(line, "Playerinvenrow%d[%d]=%d", &i, &j, &Playerdata->inventoryrow2n3available[i-2][j]);
+                }
+            }
+        }
 /////////somehow when load gamedata the character is floating
         if (strstr(line, "Jumpboostactive=")){
             sscanf(line, "Jumpboostactive=%d", &Playerdata->jumpboostshdact);
@@ -2042,6 +2202,10 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "Potioneffecttimer=%f", &Playerdata->potioneffect);
         }else if (strstr(line, "Potionactivetype=")){
             sscanf(line, "Potionactivetype=%d", &Playerdata->activepotiontype);
+        }else if (strstr(line, "Numberofkeys=")){
+            sscanf(line, "Numberofkeys=%d", &Playerdata->keycount);
+        }else if(strstr(line, "Shopkeycount=")){
+            sscanf(line, "Shopkeycount=%d", &assets->shopkeycount);
         }
     }
     fclose(file);
@@ -2240,6 +2404,9 @@ void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets, bool c
                 else{
                     player->currency = MAX_CURRENCY;
                 }
+            }
+            if (enemywithkey){
+                addItemToInventory(player, 1);
             }
             return;
         }

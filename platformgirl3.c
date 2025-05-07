@@ -89,6 +89,9 @@ struct Playerinfo
     bool enemywithkey[MAX_ENEMIES];
     bool deadenemyremoved;
     bool chestrec;
+    int cheststate;
+    int chestanimationframe;
+    float chestanimationtimer;
 
     float playerdamage;
     int animationstate;
@@ -165,7 +168,7 @@ Arrow arrows[MAX_ARROWS];
 
 //function prototypes
 void drawbackground(struct GameAssets* assets, Camera2D* camera, int x, float scalefactor);
-void drawobstacles(int blockcount, struct GameAssets* assets);
+void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo* player);
 int calculatemovementplayer(struct Playerinfo* player, int* maxplatform, struct GameAssets* assets, Gamestate currentgamestate);
 void updatecamera(Camera2D* camera, struct Playerinfo* player);
 void keepobjectwithinscreen(struct Playerinfo* object, struct GameAssets* assets);
@@ -692,7 +695,7 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
 
     drawbuttonsplayingstate(assets, camera, currentGameState, Playerdata);
     playerenemyhpbar(Playerdata, enemies, assets, *enemycount, camera);
-    drawobstacles(*blockcount, assets);
+    drawobstacles(*blockcount, assets, Playerdata);
     shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
     *playerlastframedirection = calculatemovementplayer(Playerdata, blockcount, assets, *currentGameState);
     updatecamera(camera, Playerdata);
@@ -2240,14 +2243,18 @@ int loadmap(const char* filename, struct GameAssets* assets){
         for (int col = 0; line[col] != '\0' && line[col] != '\n'; col++) {
             if (line[col] == '1') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockheight, blockwidth, blockheight};
+                blocksarray[i].chestrec = false;
                 i++;
             } else if (line[col] == '2') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockheight, blockwidth, blockheight};
                 blocksarray[i].chestrec = true;
+                blocksarray[i].cheststate = 0;
+                blocksarray[i].chestanimationframe = 0;
+                blocksarray[i].chestanimationtimer = 0.0f;
                 i++;
             } else if (line[col] == '3') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockheight, blockwidth, blockheight};
-                blocksarray[i].colour = RED; // Example: Set a unique color for enemy blocks
+                blocksarray[i].colour = RED; 
                 i++;
             }
         }
@@ -2257,16 +2264,60 @@ int loadmap(const char* filename, struct GameAssets* assets){
     return i;
 }
 
-void drawobstacles(int blockcount, struct GameAssets* assets){
-    Rectangle sourceRect ={240, 48, 63,30};
+void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo* player) {
+    Rectangle sourceRect = {240, 48, 63, 30};
     Vector2 origin = {0, 0};
-    for (int i=0; i<blockcount; i++){
+    Texture2D chesttexture;
+
+    for (int i = 0; i < blockcount; i++) {
         DrawTexturePro(assets->texture[12], sourceRect, blocksarray[i].rect, origin, 0, WHITE);
 
-        if (blocksarray[i].chestrec){
-            Rectangle chestsrc = {0, 0, assets->texture[38].width/5, assets->texture[38].height/8};
-            Rectangle chestdest = {blocksarray[i].rect.x, blocksarray[i].rect.y - (assets->texture[38].height/8) - 70, 130, 100};
-            DrawTexturePro(assets->texture[38], chestsrc, chestdest, origin, 0, WHITE);
+        if (blocksarray[i].chestrec) {
+            chesttexture = assets->texture[38];
+            Rectangle chestdest = {blocksarray[i].rect.x, blocksarray[i].rect.y - (assets->texture[38].height / 8) - 68, 130, 100};
+
+            // Check if the player is near the chest
+            if (player->Position.x + player->width > blocksarray[i].rect.x &&
+                player->Position.x < blocksarray[i].rect.x + blocksarray[i].rect.width &&
+                player->Position.y + player->height > blocksarray[i].rect.y - 50 &&
+                player->Position.y < blocksarray[i].rect.y + blocksarray[i].rect.height) {
+                DrawRectangleRounded((Rectangle){chestdest.x - 40, chestdest.y - 30, chestdest.width + 70, 40}, 20, 0, (Color){255, 255, 255, 100});
+                aligntextcentre(chestdest.x + chestdest.width / 2, chestdest.y - 10, 30, "Press E to Open", WHITE);
+
+                if (IsKeyPressed(KEY_E) && blocksarray[i].cheststate == 0) {
+                    blocksarray[i].cheststate = 1; 
+                    blocksarray[i].chestanimationframe = 0;
+                    blocksarray[i].chestanimationtimer = 0.0f;
+                }
+            }
+
+
+            if (blocksarray[i].cheststate == 1) {
+                blocksarray[i].chestanimationtimer += GetFrameTime();
+                if (blocksarray[i].chestanimationtimer >= 0.1f) { 
+                    blocksarray[i].chestanimationframe++;
+                    blocksarray[i].chestanimationtimer = 0.0f;
+
+                    if (blocksarray[i].chestanimationframe >= 9) { 
+                        blocksarray[i].cheststate = 2; 
+                        blocksarray[i].chestanimationframe = 9;
+                    }
+                }
+            }
+
+
+            int frameindex = blocksarray[i].chestanimationframe % 5;
+            int rowindex = blocksarray[i].chestanimationframe / 5; 
+
+            Rectangle chestsrc = {
+                frameindex * (assets->texture[38].width / 5), 
+                rowindex * (assets->texture[38].height / 8),  
+                assets->texture[38].width / 5,               
+                assets->texture[38].height / 8             
+            };
+
+            // Draw the chest
+            DrawTexturePro(chesttexture, chestsrc, chestdest, origin, 0, WHITE);
         }
     }
 }
@@ -2828,6 +2879,7 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("Images/Key.png"); //36
     assets.images[assets.imagecount++] = LoadImage("Images/coin.png");
     assets.images[assets.imagecount++] = LoadImage("Images/Chests.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/Chestsbordered.png"); //39
 
     //assets.images[assets.imagecount++] = LoadImage("Landing_KG_2.gif");
 
@@ -2883,6 +2935,7 @@ int main()
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[36]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[37]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[38]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[39]); //39
 }
     
     struct Playerinfo Playerdata = {0};

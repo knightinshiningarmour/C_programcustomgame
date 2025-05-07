@@ -88,6 +88,7 @@ struct Playerinfo
     bool enemywithcoin[MAX_ENEMIES];
     bool enemywithkey[MAX_ENEMIES];
     bool deadenemyremoved;
+    bool chestrec;
 
     float playerdamage;
     int animationstate;
@@ -164,7 +165,7 @@ Arrow arrows[MAX_ARROWS];
 
 //function prototypes
 void drawbackground(struct GameAssets* assets, Camera2D* camera, int x, float scalefactor);
-void drawobstacles(int* maxplatform, struct GameAssets* assets);
+void drawobstacles(int blockcount, struct GameAssets* assets);
 int calculatemovementplayer(struct Playerinfo* player, int* maxplatform, struct GameAssets* assets, Gamestate currentgamestate);
 void updatecamera(Camera2D* camera, struct Playerinfo* player);
 void keepobjectwithinscreen(struct Playerinfo* object, struct GameAssets* assets);
@@ -530,8 +531,8 @@ void handleOptionsState(struct GameAssets* assets, Gamestate* currentGameState, 
     Rectangle optiontabdest = {600, 370, 900, windheight + 80};
     Vector2 optiontaborigin = {optiontabdest.width/2, optiontabdest.height/2};
     Vector2 mousePos = GetMousePosition();
-    Rectangle volumebuttondest = {300, 220, 250, 80};                
-    Rectangle volumeSlider = {windwidth / 2, 235, 200, 40}; 
+    Rectangle volumebuttondest = {300, 200, 250, 80};                
+    Rectangle volumeSlider = {windwidth / 2, 215, 200, 40}; 
     Rectangle homebuttonsrc = {65, 34, 91, 97};
     Rectangle homebuttondest = {1030, 50, 120, 120};
     static bool loadedmusicvol = false;
@@ -576,26 +577,26 @@ void handleOptionsState(struct GameAssets* assets, Gamestate* currentGameState, 
     sprintf(volumeText, "%.0f", *musicVolume * 100);
     DrawText(volumeText, volumeSlider.x + volumeSlider.width + 20, volumeSlider.y+volumeSlider.height/2-10, 20, BLACK);
 
-    const char* controls[] = {"Space", "A/D", "Left Mouse", "Shift", "P", "E"};
-    const char* functions[] = {"Jump", "Left/Right", "Attack", "Parry", "Pause", "Interact"};
+    const char* controls[] = {"Space", "A/D", "Left Mouse", "Shift", "P", "E", "I"};
+    const char* functions[] = {"Jump", "Left/Right", "Attack", "Parry", "Pause", "Interact", "Inventory"};
     int FontSize = 20; 
     int emptybuttonWidth = 150; 
     int emptybuttonHeight = 50; 
     int controlsStartY = volumebuttondest.y + volumebuttondest.height + 40; // Starting Y position for controls
-    int buttonSpacing = 15;
+    int buttonSpacing = 12;
     int buttonGap = 20; 
     static float settingssavedtimer = 0.0f;
     
     // Draw "Controls" title
-    DrawText("Controls:", 310, controlsStartY - 5, FontSize + 5, BLACK);
+    DrawText("Controls:", 310, controlsStartY - 30, FontSize + 5, BLACK);
 
-    int displaybutton = 6;
+    int displaybutton = 7;
     for (int i = 0; i < displaybutton; i++) {
-        Rectangle keyButtonRect = {300, controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 30, emptybuttonWidth,emptybuttonHeight};
-        Rectangle functionButtonRect = {keyButtonRect.x + keyButtonRect.width + buttonGap, controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 30, 
+        Rectangle keyButtonRect = {300, controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 60, emptybuttonWidth,emptybuttonHeight};
+        Rectangle functionButtonRect = {keyButtonRect.x + keyButtonRect.width + buttonGap, controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 60, 
                                         emptybuttonWidth + 50, emptybuttonHeight};
         DrawTexturePro(assets->texture[23], (Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},
-                        keyButtonRect, (Vector2){0, 0}, 0.0f, WHITE );
+                        keyButtonRect, (Vector2){0, 0}, 0.0f, WHITE);
         DrawTexturePro(assets->texture[23],(Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},
                         functionButtonRect, (Vector2){0, 0}, 0.0f, WHITE);
         aligntextcentre(keyButtonRect.x + keyButtonRect.width / 2, keyButtonRect.y + keyButtonRect.height / 2, FontSize, controls[i], BLACK);
@@ -691,7 +692,7 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
 
     drawbuttonsplayingstate(assets, camera, currentGameState, Playerdata);
     playerenemyhpbar(Playerdata, enemies, assets, *enemycount, camera);
-    drawobstacles(blockcount, assets);
+    drawobstacles(*blockcount, assets);
     shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
     *playerlastframedirection = calculatemovementplayer(Playerdata, blockcount, assets, *currentGameState);
     updatecamera(camera, Playerdata);
@@ -2215,7 +2216,7 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
     
 }
 
-int loadmap(const char* filename) {
+int loadmap(const char* filename, struct GameAssets* assets){
     FILE* Fileread = fopen(filename, "r");
     if (!Fileread) {
         printf("Failed to open map file!\n");
@@ -2242,7 +2243,7 @@ int loadmap(const char* filename) {
                 i++;
             } else if (line[col] == '2') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockheight, blockwidth, blockheight};
-                blocksarray[i].colour = GOLD; // Example: Set a unique color for chest blocks
+                blocksarray[i].chestrec = true;
                 i++;
             } else if (line[col] == '3') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockheight, blockwidth, blockheight};
@@ -2253,14 +2254,20 @@ int loadmap(const char* filename) {
         row++;
     }
     fclose(Fileread);
-    return i; // Return the total number of blocks loaded
+    return i;
 }
 
-void drawobstacles(int* maxplatform, struct GameAssets* assets){
+void drawobstacles(int blockcount, struct GameAssets* assets){
     Rectangle sourceRect ={240, 48, 63,30};
     Vector2 origin = {0, 0};
-    for (int i=0; i<*maxplatform; i++){
+    for (int i=0; i<blockcount; i++){
         DrawTexturePro(assets->texture[12], sourceRect, blocksarray[i].rect, origin, 0, WHITE);
+
+        if (blocksarray[i].chestrec){
+            Rectangle chestsrc = {0, 0, assets->texture[38].width/5, assets->texture[38].height/8};
+            Rectangle chestdest = {blocksarray[i].rect.x, blocksarray[i].rect.y - (assets->texture[38].height/8) - 70, 130, 100};
+            DrawTexturePro(assets->texture[38], chestsrc, chestdest, origin, 0, WHITE);
+        }
     }
 }
 
@@ -2883,7 +2890,9 @@ int main()
     Gamestate currentGameState = MENU;
     Gamestate previousgamestate;
     int currentmusic, enemyonblock[MAX_ENEMIES]; 
-    int blockcount = loadmap("map.txt");
+    int blockcount;
+    
+    blockcount = loadmap("map.txt", &assets);
     int playerlastframedirection = 1;
     int playercurrentframe = 0;
     int playeranimationindex = 0;

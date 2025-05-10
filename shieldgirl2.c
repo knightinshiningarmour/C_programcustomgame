@@ -9,11 +9,19 @@
 #define MAX_ENEMIES 3
 #define MAX_SHOP_ITEMS 5
 #define MAX_CURRENCY 2000
+#define MAX_ARROWS 3
 
 const int windwidth = 1200;
 const int windheight = 800;
 const int mapwidth = windwidth * 3;
 const int mapheight = -windheight * 5;
+
+typedef enum{
+    ITEM_NONE,
+    KEY,
+    ARMOR,
+    SWORD
+}ItemType;
 
 struct GameAssets 
 { //store game assets
@@ -47,6 +55,11 @@ struct GameAssets
     int soundcount;
     int potionleftinshop[4];
     int potionprice[4];
+    int shopkeycount;
+    int shopkeyprice;
+
+    int coincurrentframe;
+    int coinindex;
 };
 
 struct Playerinfo 
@@ -71,6 +84,14 @@ struct Playerinfo
     bool onshield;
     bool attack;
     bool dead;
+    bool arrowshot;
+    bool enemywithcoin[MAX_ENEMIES];
+    bool enemywithkey[MAX_ENEMIES];
+    bool deadenemyremoved;
+    bool chestrec;
+    int cheststate;
+    int chestanimationframe;
+    float chestanimationtimer;
 
     float playerdamage;
     int animationstate;
@@ -86,6 +107,9 @@ struct Playerinfo
 
     int potionbought[4];
     int potionorder[4];
+    int inventoryrow2n3available[2][4];
+    int row2n3invencount;
+    int rowspacing;
     int potioncount;
     int activepotiontype;
     int playerdefense;
@@ -95,6 +119,8 @@ struct Playerinfo
     bool jumpboostactivated;
     bool attackboostshdact;
     float potioneffect;
+
+    int keycount;
 };
 
 struct ShopItem {
@@ -117,23 +143,41 @@ typedef enum
     GAMEOVER,
 } Gamestate;
 
+typedef struct Arrow{
+    Vector2 position;
+    int direction;
+    bool active;
+    bool movingDown;
+    bool arrowonground;
+    bool arrowonblock;
+    bool reflected;
+
+    float speedX;
+    float speedY;
+    float arrowtimer;
+    float rotation;
+    float arrowongroundtimer;
+    float arrowonblocktimer;
+    float reflectedtimer;
+}Arrow;
+
+
 struct Playerinfo *blocksarray = NULL;
 struct Playerinfo enemies[MAX_ENEMIES];
+Arrow arrows[MAX_ARROWS];
 
 //function prototypes
 void drawbackground(struct GameAssets* assets, Camera2D* camera, int x, float scalefactor);
-void drawobstacles(int* maxplatform, struct GameAssets* assets);
+void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo* player);
 int calculatemovementplayer(struct Playerinfo* player, int* maxplatform, struct GameAssets* assets, Gamestate currentgamestate);
 void updatecamera(Camera2D* camera, struct Playerinfo* player);
 void keepobjectwithinscreen(struct Playerinfo* object, struct GameAssets* assets);
 void LoadAnimationDataplayer(struct GameAssets* assets);
 void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player, int* currentframecount, int* facedirection, int* i);
 void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enemyonblock[MAX_ENEMIES], int enemyIndex, struct GameAssets* assets);
-void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets);
+void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets, bool coinenemy, bool enemywithkey, struct Playerinfo* player);
 void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], int facedirection);
-void removeDeadEnemies(struct Playerinfo enemies[MAX_ENEMIES], int* enemyCount);
-void iteratearrowanimation(int facedirection, Texture2D texture, struct GameAssets* assets, Vector2* arrowPos, 
-                            Vector2 enemypos, Rectangle rec, Rectangle playerHitbox, int blockCount, struct Playerinfo* player, bool* arrowActive, int playerlastframedirection);
+void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* assets, Rectangle ground, Rectangle playerHitbox, int blockCount, struct Playerinfo* player, int playerlastframedirection);
 void Unloadresources(struct GameAssets* assets);
 void aligntextcentre(int x, int y, int fontsize, const char* text, Color color);
 void rotatetextcentre(const char* text, Vector2 position, int fontSize, float rotation, Color color);
@@ -153,6 +197,8 @@ void playerenemyhpbar(struct Playerinfo* player, struct Playerinfo enemies[MAX_E
 void shopInteraction(struct Playerinfo* player, int* playerCurrency);
 void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic, float* musicVolume);
 void shopstateanimation(struct GameAssets* assets);
+void drawInventory2n3row(struct GameAssets* assets, struct Playerinfo* player, Rectangle playerinvenboxes[12]);
+void addItemToInventory(struct Playerinfo* player, ItemType itemType);
 
 
 void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
@@ -193,8 +239,9 @@ void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, 
             break;
         case GAMEOVER:
             DrawText("Game Over. Press ENTER to Restart", windwidth / 2 - 150, windheight / 2, 20, BLACK);
-            if (IsKeyPressed(KEY_ENTER))
-            {*currentGameState = MENU;}
+            if (IsKeyPressed(KEY_ENTER)){
+                *currentGameState = MENU;
+            }
             break;
     }
 }
@@ -219,6 +266,9 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->potioncount = 0;
     Playerdata->potioneffect = 0.0f;
     Playerdata->activepotiontype = -1;
+    Playerdata->keycount = 0;
+    assets->shopkeycount = 1;
+    assets->shopkeyprice = 500;
 
     Playerdata->jumpboost = -700.0f; //jump
     Playerdata->jumpboostshdact = false;
@@ -229,6 +279,14 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     for (int i = 0; i<4; i++){
         Playerdata->potionbought[i] = 0;
         Playerdata->potionorder[i] = 0;
+        Playerdata->row2n3invencount = 0;
+        Playerdata->rowspacing = 0;
+
+        if (i < 2){
+            for (int j = 0; j < 4; j++){
+                Playerdata->inventoryrow2n3available[i][j] = 0;
+            }
+        }
     }
     *currentGameState = MENU;
     *currentmusic = -1; 
@@ -243,8 +301,50 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     assets->potionprice[1] = 80;
     assets->potionprice[2] = 100;
     assets->potionprice[3] = 100;
-
     LoadAnimationDataplayer(assets);
+
+    for (int i = 0; i < MAX_ARROWS; i++) {
+        arrows[i].active = false;
+        arrows[i].position = (Vector2){0, 0};
+        arrows[i].direction = 1;
+        arrows[i].speedX = 160.0f;
+        arrows[i].speedY = 45.0f;
+        arrows[i].rotation = 0.0f;
+        arrows[i].arrowtimer = 0.0f;
+        arrows[i].movingDown = false;
+        arrows[i].arrowonground = false;
+        arrows[i].arrowonblock = false;
+        arrows[i].reflected = false;
+        arrows[i].arrowongroundtimer = 0.0f;
+        arrows[i].arrowonblocktimer = 0.0f;
+        arrows[i].reflectedtimer = 0.0f;
+    }
+
+    for (int i = 0; i < MAX_ENEMIES; i++) {
+        enemies[i].Position = (Vector2){400 + i * 700, 700 - 700*i};
+        enemies[i].width = 105;
+        enemies[i].height = 140;
+        enemies[i].attack = false;
+        enemies[i].dead = false;
+        enemies[i].deadenemyremoved = false;
+        enemies[i].isrunning = true;
+        enemies[i].currentframe = 0;
+        enemies[i].animationindex = 0;
+        enemies[i].animationtimer = 0.0f;
+        enemies[i].facedirection = -1;
+        enemies[i].hitpoints = 75;
+        enemies[i].deadtimer = 0.0f;
+        if (i % 2 == 0){
+            enemies[i].enemywithcoin[i] = true; 
+            enemies[i].enemywithkey[i] = false;
+        }else if (i % 2 == 1){
+            enemies[i].enemywithcoin[i] = false; 
+            enemies[i].enemywithkey[i] = true;
+        }else if (i % 3 == 0){
+            enemies[i].enemywithcoin[i] = true;   
+            enemies[i].enemywithkey[i] = true;
+        }
+    }
 }
 
 void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, Gamestate* previousgamestate){
@@ -337,7 +437,7 @@ void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, G
         enemies[i].Position.y = windheight - 240; // Position near the bottom of the screen
         enemies[i].animationstate = 0; // Set to idle animation state
         enemies[i].facedirection = (i % 2 == 0) ? 1 : -1; // Alternate facing directions
-        enemyanimations(&enemies[i], assets);
+        enemyanimations(&enemies[i], assets, NULL, NULL, Playerdata);
     }
 
     //reset back to the wanted position
@@ -414,7 +514,7 @@ void handleLoadSaves(struct GameAssets* assets, struct Playerinfo* Playerdata, G
         ishovered = true;
         aligntextcentre(loadButton.x + loadButton.width / 2, loadButton.y + loadButton.height / 2, 30, "LOAD GAME", BLACK);
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            initializeGameState(assets, Playerdata, currentGameState, currentmusic, musicVolume, playerlastframedirection);
+            //initializeGameState(assets, Playerdata, currentGameState, currentmusic, musicVolume, playerlastframedirection);
             loadgamedata(assets, Playerdata, currentGameState, currentmusic, musicVolume, enemycount, enemies, camera);
             *currentGameState = PLAYING;
         }
@@ -434,8 +534,8 @@ void handleOptionsState(struct GameAssets* assets, Gamestate* currentGameState, 
     Rectangle optiontabdest = {600, 370, 900, windheight + 80};
     Vector2 optiontaborigin = {optiontabdest.width/2, optiontabdest.height/2};
     Vector2 mousePos = GetMousePosition();
-    Rectangle volumebuttondest = {300, 220, 250, 80};                
-    Rectangle volumeSlider = {windwidth / 2, 235, 200, 40}; 
+    Rectangle volumebuttondest = {300, 200, 250, 80};                
+    Rectangle volumeSlider = {windwidth / 2, 215, 200, 40}; 
     Rectangle homebuttonsrc = {65, 34, 91, 97};
     Rectangle homebuttondest = {1030, 50, 120, 120};
     static bool loadedmusicvol = false;
@@ -480,26 +580,26 @@ void handleOptionsState(struct GameAssets* assets, Gamestate* currentGameState, 
     sprintf(volumeText, "%.0f", *musicVolume * 100);
     DrawText(volumeText, volumeSlider.x + volumeSlider.width + 20, volumeSlider.y+volumeSlider.height/2-10, 20, BLACK);
 
-    const char* controls[] = {"Space", "A/D", "Left Mouse", "Shift", "P", "E"};
-    const char* functions[] = {"Jump", "Left/Right", "Attack", "Parry", "Pause", "Interact"};
+    const char* controls[] = {"Space", "A/D", "Left Mouse", "Shift", "P", "E", "I"};
+    const char* functions[] = {"Jump", "Left/Right", "Attack", "Parry", "Pause", "Interact", "Inventory"};
     int FontSize = 20; 
     int emptybuttonWidth = 150; 
     int emptybuttonHeight = 50; 
     int controlsStartY = volumebuttondest.y + volumebuttondest.height + 40; // Starting Y position for controls
-    int buttonSpacing = 15;
+    int buttonSpacing = 12;
     int buttonGap = 20; 
     static float settingssavedtimer = 0.0f;
     
     // Draw "Controls" title
-    DrawText("Controls:", 310, controlsStartY - 5, FontSize + 5, BLACK);
+    DrawText("Controls:", 310, controlsStartY - 30, FontSize + 5, BLACK);
 
-    int displaybutton = 6;
+    int displaybutton = 7;
     for (int i = 0; i < displaybutton; i++) {
-        Rectangle keyButtonRect = {300, controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 30, emptybuttonWidth,emptybuttonHeight};
-        Rectangle functionButtonRect = {keyButtonRect.x + keyButtonRect.width + buttonGap, controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 30, 
+        Rectangle keyButtonRect = {300, controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 60, emptybuttonWidth,emptybuttonHeight};
+        Rectangle functionButtonRect = {keyButtonRect.x + keyButtonRect.width + buttonGap, controlsStartY + (i + 1) * (emptybuttonHeight + buttonSpacing) - 60, 
                                         emptybuttonWidth + 50, emptybuttonHeight};
         DrawTexturePro(assets->texture[23], (Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},
-                        keyButtonRect, (Vector2){0, 0}, 0.0f, WHITE );
+                        keyButtonRect, (Vector2){0, 0}, 0.0f, WHITE);
         DrawTexturePro(assets->texture[23],(Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},
                         functionButtonRect, (Vector2){0, 0}, 0.0f, WHITE);
         aligntextcentre(keyButtonRect.x + keyButtonRect.width / 2, keyButtonRect.y + keyButtonRect.height / 2, FontSize, controls[i], BLACK);
@@ -580,10 +680,6 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
         SetMusicVolume(assets->music[*currentmusic], *musicVolume);
     }
     BeginMode2D(*camera);
-    if (!*gamedataloaded) {
-        *gamedataloaded = true;
-        loadgamedata(assets, Playerdata, currentGameState, currentmusic, musicVolume, enemycount, enemies, camera);
-    }
     for (int j = 1; j < 5; j++){
         if (j == 4){
             drawbackground(assets, camera, j, 0.7);
@@ -595,16 +691,13 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
 
     drawbuttonsplayingstate(assets, camera, currentGameState, Playerdata);
     playerenemyhpbar(Playerdata, enemies, assets, *enemycount, camera);
-    drawobstacles(blockcount, assets);
+    drawobstacles(*blockcount, assets, Playerdata);
     shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
     *playerlastframedirection = calculatemovementplayer(Playerdata, blockcount, assets, *currentGameState);
     updatecamera(camera, Playerdata);
     keepobjectwithinscreen(Playerdata, assets);
     iterateanimationplayer(assets, Playerdata, playercurrentframe, playerlastframedirection, playeranimationindex);
     
-    static bool arrowActive = false; 
-    static Vector2 arrowPos = {0, 0}; 
-    static int arrowFacedirection = 1;
     Texture2D arrowtexture = assets->texture[18];
     Rectangle ground = {0, windheight - assets->texture[13].height * 0.7, mapwidth, assets->texture[13].height * 0.7};
     Rectangle playerHitbox = {Playerdata->Position.x, Playerdata->Position.y, Playerdata->width - 30, Playerdata->height};
@@ -612,31 +705,39 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
         playerHitbox.x += 40;
     }
 
-
     for (int i = 0; i < MAX_ENEMIES; i++) {
         enemymovement(&enemies[i], Playerdata, enemyonblock, i, assets);
-        enemyanimations(&enemies[i], assets);
+        enemyanimations(&enemies[i], assets, enemies[i].enemywithcoin[i], enemies[i].enemywithkey[i], Playerdata);
 
-        if (enemies[i].attack && enemies[i].animationindex == 9) { 
-            if (!arrowActive) {
-                arrowActive = true; 
-                if (enemies[i].facedirection > 0) {
-                    arrowPos = (Vector2){enemies[i].Position.x + enemies[i].width, enemies[i].Position.y + enemies[i].height / 2}; 
-                } else {
-                    arrowPos = (Vector2){enemies[i].Position.x, enemies[i].Position.y + enemies[i].height / 2}; // Reset arrow position
+        if (enemies[i].attack && enemies[i].animationindex == 9 && !enemies[i].arrowshot){
+            for (int j = 0; j < MAX_ARROWS; j++){ //only allow three arrows to be active at a time
+                if (!arrows[j].active) {
+                    arrows[j].active = true;
+                    arrows[j].direction = enemies[i].facedirection;
+                    if (enemies[i].facedirection > 0) {
+                        arrows[j].position = (Vector2){enemies[i].Position.x + enemies[i].width, enemies[i].Position.y + enemies[i].height / 2};
+                    } else {
+                        arrows[j].position = (Vector2){enemies[i].Position.x, enemies[i].Position.y + enemies[i].height / 2};
+                    }
+                    enemies[i].arrowshot = true;
+                    break; // Activate only one arrow per attack
                 }
-                arrowFacedirection = enemies[i].facedirection; 
             }
+        }
+
+        if (!enemies[i].attack || enemies[i].animationindex != 9) {
+            enemies[i].arrowshot = false;
+        }
+    }
+    for (int i = 0; i < MAX_ARROWS; i++){
+        if (arrows[i].active) {
+            iteratearrowanimation(&arrows[i], arrowtexture, assets, ground, playerHitbox, *blockcount, Playerdata, *playerlastframedirection);
         }
     }
 
-    if (arrowActive) {
-        iteratearrowanimation(arrowFacedirection, arrowtexture, assets, &arrowPos, 
-                            arrowPos, ground, playerHitbox, *blockcount, Playerdata, &arrowActive, *playerlastframedirection);
-    }
-
     checkPlayerAttackCollision(Playerdata, enemies, *playerlastframedirection);
-    removeDeadEnemies(enemies, enemycount);
+    //removeDeadEnemies(enemies, enemycount, Playerdata);
+    printf("PlayerPosition: (%f, %f)\n", Playerdata->Position.x, Playerdata->Position.y);
     EndMode2D();
 
     if (IsKeyPressed(KEY_P)){
@@ -745,7 +846,7 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
     DrawTexturePro(assets->texture[34], invenbg, invenbgdest, (Vector2){0, 0}, 0.0f, WHITE);
     DrawTexturePro(assets->texture[1], playeridlesrc, playeridledest, (Vector2){0, 0}, 0.0f, WHITE);
     DrawText("Inventory", 435, invenbgdest.y + 20, 70, BLUE);
-    //printf("%.2f, %.2f\n", mousepos.x, mousepos.y);
+    printf("%.2f, %.2f\n", mousepos.x, mousepos.y);
     DrawTexturePro(assets->texture[31], settingsbuttonsrc, settingsbuttondest, (Vector2){0, 0}, 0, WHITE);
     DrawTexturePro(assets->texture[31], resumebuttonsrc, resumebuttondest, (Vector2){0, 0}, 0, WHITE); 
 
@@ -759,7 +860,7 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
         DrawTexturePro(assets->texture[30], playerinvensrc, playerinvendest, (Vector2){0, 0}, 0.0f, WHITE);
         playerinvenboxes[i] = playerinvendest;
     
-        if (i < player->potioncount) {
+        if (i < player->potioncount){
             int potiontype = player->potionorder[i];
             if (player->potionbought[potiontype] > 0) {
                 potionavailable[potiontype] = true;
@@ -772,15 +873,30 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
             }
         }
     }
+    drawInventory2n3row(assets, player, playerinvenboxes);
 
     DrawRectangleLinesEx(hoverborderdest, 3, GOLD);
     char potiondesc[4][30] = {"Heal 30Hp", "Jump Height x1.5 for 20s", "+10 damage for 20s", "+5 defense for 20s"};
     int potionnum = (hoverborderdest.x - 401) / 100;
 
+    if (hoverborderdest.y >= 369 && hoverborderdest.y <= 468){
+        if (player->inventoryrow2n3available[0][potionnum] == 1){
+            aligntextcentre(900, 650, 30, "Key. Collect this to unlock the", BLUE);
+            aligntextcentre(900, 690, 30, "door located at the Eastern. ", BLUE);
+        }else if (player->inventoryrow2n3available[0][potionnum] == 2){
+            aligntextcentre(900, 650, 30, "Plated Armour. Wear this to", BLUE);
+            aligntextcentre(900, 690, 30, "triumph in battles. ", BLUE);
+        }else if (player->inventoryrow2n3available[0][potionnum] == 3){
+            aligntextcentre(900, 650, 30, "Sharpened Sword. Believed to be", BLUE);
+            aligntextcentre(900, 690, 30, "made by the strongest blacksmith. ", BLUE);
+        }
+    }
     if (potionnum < player->potioncount) {
         int type = player->potionorder[potionnum];
         if (player->potionbought[type] != 0) {
-            aligntextcentre(1000, 600, 30, potiondesc[type], BLUE);
+            if (hoverborderdest.y < 270){
+                aligntextcentre(1000, 650, 30, potiondesc[type], BLUE);
+            }
             if (IsKeyPressed(KEY_ENTER) && !potionuseconfirmation) {
                 potionuseconfirmation = true;
                 secondenter = false;
@@ -888,6 +1004,8 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
     Rectangle playerhpsrc = {337 - (48 * ((100 - player->currenthp)/7)), 1, 46, 14};
     Rectangle playerhpdest = {50, 50, 200, 70};
     Rectangle descriptionrecdest = {65, 325, 325, 470};
+    Rectangle keysrc = {0, 0, assets->texture[36].width, assets->texture[36].height};
+    Rectangle keydest = {450, 325, 50, 40};
 
     //static int potionindexbought[4];
     //int potioncount;
@@ -937,6 +1055,33 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
         Rectangle potionsdest = {448 + (i * potionsrc.width/6), 205, potionsrc.width/8 - 5, potionsrc.height/8};
         potionspos[i] = (Rectangle){potionsdest.x, potionsdest.y, potionsdest.width, potionsdest.height};
         DrawTexturePro(assets->texture[29], potionsrc, potionsdest, (Vector2){0, 0}, 0.0f, WHITE);
+    }
+   
+    DrawTexturePro(assets->texture[36], keysrc, keydest, (Vector2){0, 0}, 0.0f, WHITE);
+    if (assets->shopkeycount != 0){
+        sprintf(potionleft, "x%d", assets->shopkeycount);
+        DrawRectangleRec((Rectangle){460, 365, 40, 30}, (Color){255, 255, 153, 120});
+        DrawText(potionleft, 470, 365, 30, BLACK);
+    }else{
+        Vector2 soldtextpos = {keydest.x + keydest.width / 2, keydest.y + keydest.height / 2};
+        DrawRectangleRec((Rectangle){439, 306, 70, 87}, (Color){180, 180, 180, 180});
+        rotatetextcentre("SOLD OUT", soldtextpos, 20, -45, WHITE);
+    }
+    if (mousePos.x >= keydest.x && mousePos.x <= keydest.x + keydest.width
+        && mousePos.y >= keydest.y && mousePos.y <= keydest.y + keydest.height){
+        DrawRectangleRec(keydest, (Color){255, 255, 255, 80});
+        aligntextcentre(descriptionrecdest.x + descriptionrecdest.width/2, 450, 50, "Key", PURPLE);
+        
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
+            if (player->currency >= assets->shopkeyprice){
+                player->keycount++;
+                addItemToInventory(player, 1);
+                player->currency -= assets->shopkeyprice;
+                assets->shopkeycount--;
+            }else{
+                notenufmoney = true;
+            }
+        }
     }
 
     for (int i=0; i<4; i++){
@@ -1227,6 +1372,76 @@ void shop(struct GameAssets* assets, struct Playerinfo* player, int* currentGame
     }
 }
 
+void addItemToInventory(struct Playerinfo* player, ItemType itemType){
+    for (int row = 0; row < 2; row++) {
+        for (int col = 0; col < 4; col++) {
+            if (player->inventoryrow2n3available[row][col] == itemType) {
+                if (itemType == KEY) {
+                    player->keycount++;
+                } 
+                return;
+            }
+        }
+    }
+
+    if (player->rowspacing >= 2) {
+        printf("Inventory is full! Cannot add more items.\n");
+        return;
+    }
+
+    // Add item to the current slot
+    player->inventoryrow2n3available[player->rowspacing][player->row2n3invencount] = itemType;
+    player->row2n3invencount++;
+
+    // Move to the next row if the current row is full
+    if (player->row2n3invencount >= 4) {
+        player->row2n3invencount = 0;
+        player->rowspacing++;
+    }
+}
+
+void drawInventory2n3row(struct GameAssets* assets, struct Playerinfo* player, Rectangle playerinvenboxes[12]) {
+    int y = 0; 
+    int startIndex = 5; 
+    char keyCountText[10];
+
+    for (int i = 4; i < 12; i++) {
+        int x = i % 4; 
+        if (i % 4 == 0 && i != 0){
+            y++; 
+        }
+        Rectangle slotRect = playerinvenboxes[i];
+
+        switch (player->inventoryrow2n3available[y-1][x]){
+            case KEY:
+                Rectangle keysrc = {0, 0, assets->texture[36].width, assets->texture[36].height};
+                Rectangle keydest = {slotRect.x + 20, slotRect.y + 20, 65, 45};
+                DrawTexturePro(assets->texture[36], keysrc, keydest, (Vector2){0, 0}, 0.0f, WHITE);
+                break;
+            case ARMOR:
+                break;
+            case SWORD:
+                break;
+            default:
+                break;
+        }
+
+                //20,10,60,80
+        switch (player->inventoryrow2n3available[y-1][x]){
+            case KEY:
+                sprintf(keyCountText, "x%d", player->keycount);
+                DrawText(keyCountText, slotRect.x + 55, slotRect.y + 60, 40, BLACK);
+                break;
+            case ARMOR:
+                break;
+            case SWORD:
+                break;
+            default:
+                break;
+        }
+    }
+}
+
 Camera2D Camerasettings(struct Playerinfo* player){
     Camera2D camera;
     //camera.offset = (Vector2){windwidth/2, windheight/2};
@@ -1339,6 +1554,7 @@ void drawbuttonsplayingstate(struct GameAssets* assets, Camera2D* camera, Gamest
     Rectangle settingsbuttonsrc = {67, 270, 90, 96};
     Rectangle settingsbuttondest = {pausebuttondest.x + 90, pausebuttondest.y, 76, 76};
     Rectangle settingsbuttondestcollision = {pausebuttondestcollision.x + 90, pausebuttondestcollision.y, 70, 70};
+
     float dt = GetFrameTime();
 
     DrawRectangleRec(currencyrec, WHITE);
@@ -1492,7 +1708,8 @@ void collisionplayerblocks(char axis, struct Playerinfo* object, int* maxplatfor
     if (!touchingPlatform) {
         object->onplatform = false;
     }
-    
+
+
 }
 
 int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct GameAssets *assets, Gamestate currentgamestate) {
@@ -1570,7 +1787,7 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
         player->isrunning = false;
         player->velocityY += gravity * dt;
 
-        if (player->velocityY >= 0) {
+        if (player->velocityY > 0) {
             player->isfalling = true;
             player->animationstate = 3; //falling animation
         } else {
@@ -1581,6 +1798,8 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
     if (!player->isJumping && !player->onground && !player->onplatform) {
         player->isfalling = true;
         player->velocityY = 0;
+    }else{
+        player->isfalling = false;
     }
     player->Position.y += player->velocityY * dt;
     collisionplayerblocks('y', player, maxplatform, &facedirection);
@@ -1826,6 +2045,7 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
     if (file) {
         fprintf(file, "PlayerPositionX=%.2f\n", Playerdata->Position.x);
         fprintf(file, "PlayerPositionY=%.2f\n", Playerdata->Position.y);
+        fprintf(file, "Playeranimationstate=%d\n", Playerdata->animationstate);
         fprintf(file, "PlayerIsJumping=%d\n", Playerdata->isJumping);
         fprintf(file, "PlayerIsFalling=%d\n", Playerdata->isfalling);
         fprintf(file, "PlayerVelocityY=%.2f\n", Playerdata->velocityY);
@@ -1844,6 +2064,7 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
             fprintf(file, "Enemy%dPositionY=%.2f\n", i, enemies[i].Position.y);
             fprintf(file, "Enemy%dHealth=%d\n", i, enemies[i].hitpoints);
             fprintf(file, "Enemy%dDead=%d\n", i, enemies[i].dead);
+            fprintf(file, "Enemy%disremoved=%d\n", i, enemies[i].deadenemyremoved);
         }
         fprintf(file, "CameraTargetX=%.2f\n", camera->target.x);
         fprintf(file, "CameraTargetY=%.2f\n", camera->target.y);
@@ -1852,6 +2073,12 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
             fprintf(file, "Potion %d price: %d\n", i+1, assets->potionprice[i]);
             fprintf(file, "Potion %d bought: %d\n", i+1, Playerdata->potionbought[i]);
             fprintf(file, "Potion %d remaining: %d\n", i+1, assets->potionleftinshop[i]);
+        }
+
+        for (int i = 2; i<=3; i++){
+            for (int j = 0; j < 4; j++){
+                fprintf(file, "Playerinvenrow%d[%d]=%d\n", i, j, Playerdata->inventoryrow2n3available[i-2][j]);
+            }
         }
         fprintf(file, "Jumpboostactive=%d\n", Playerdata->jumpboostshdact);
         fprintf(file, "Attackboostactive=%d\n", Playerdata->attackboostshdact);
@@ -1863,6 +2090,8 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
         }
         fprintf(file, "Potioneffecttimer=%.2f\n", Playerdata->potioneffect); 
         fprintf(file, "Potionactivetype=%d\n", Playerdata->activepotiontype);
+        fprintf(file, "Numberofkeys=%d\n", Playerdata->keycount);
+        fprintf(file, "Shopkeycount=%d\n", assets->shopkeycount);
 
         fclose(file);
     }
@@ -1883,6 +2112,8 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "PlayerPositionX=%f", &Playerdata->Position.x);
         }else if (strstr(line, "PlayerPositionY=")){
             sscanf(line, "PlayerPositionY=%f", &Playerdata->Position.y);
+        }else if (strstr(line, "Playeranimationstate=")){
+            sscanf(line, "Playeranimationstate=%d", &Playerdata->animationstate);
         }else if (strstr(line, "PlayerIsJumping=")){
             sscanf(line, "PlayerIsJumping=%d", &Playerdata->isJumping);
         }else if (strstr(line, "PlayerIsFalling=")){
@@ -1917,6 +2148,8 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             enemies[enemyIndex].hitpoints = valueInt;
         }else if (sscanf(line, "Enemy%dDead=%d", &enemyIndex, &valueInt) == 2 && enemyIndex < MAX_ENEMIES){
             enemies[enemyIndex].dead = valueInt;
+        }else if(sscanf(line, "Enemy%disremoved=%d", &enemyIndex, &valueInt) == 2 && enemyIndex < MAX_ENEMIES){
+            enemies[enemyIndex].deadenemyremoved = valueInt;
         }else if (strstr(line, "CameraTargetX=")){
             sscanf(line, "CameraTargetX=%f", &camera->target.x);
         }else if (strstr(line, "CameraTargetY=")){
@@ -1937,6 +2170,16 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
                 sscanf(line, "Potion %d bought: %d", &i, &Playerdata->potionbought[i]);
             } else if (strstr(line, potionLeftKey)){
                 sscanf(line, "Potion %d remaining: %d", &i, &assets->potionleftinshop[i]);
+            }
+        }
+
+        for (int i = 2; i<=3; i++){
+            for (int j = 0; j < 4; j++){
+                char inventoryKey[30];
+                sprintf(inventoryKey, "Playerinvenrow%d[%d]", i, j);
+                if (strstr(line, inventoryKey)){
+                    sscanf(line, "Playerinvenrow%d[%d]=%d", &i, &j, &Playerdata->inventoryrow2n3available[i-2][j]);
+                }
             }
         }
 /////////somehow when load gamedata the character is floating
@@ -1966,20 +2209,20 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "Potioneffecttimer=%f", &Playerdata->potioneffect);
         }else if (strstr(line, "Potionactivetype=")){
             sscanf(line, "Potionactivetype=%d", &Playerdata->activepotiontype);
+        }else if (strstr(line, "Numberofkeys=")){
+            sscanf(line, "Numberofkeys=%d", &Playerdata->keycount);
+        }else if(strstr(line, "Shopkeycount=")){
+            sscanf(line, "Shopkeycount=%d", &assets->shopkeycount);
         }
     }
     fclose(file);
     printf("Game data loaded successfully.\n");
-    Playerdata->velocityY = 0.0f; // Reset vertical velocity
-    Playerdata->isJumping = false;
-    Playerdata->isfalling = false;
-    Playerdata->onground = true; // Assume the player is on the ground after loading
-    Playerdata->onplatform = false;
+
 
     
 }
 
-int loadmap(const char* filename) {
+int loadmap(const char* filename, struct GameAssets* assets){
     FILE* Fileread = fopen(filename, "r");
     if (!Fileread) {
         printf("Failed to open map file!\n");
@@ -2003,28 +2246,82 @@ int loadmap(const char* filename) {
         for (int col = 0; line[col] != '\0' && line[col] != '\n'; col++) {
             if (line[col] == '1') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockheight, blockwidth, blockheight};
+                blocksarray[i].chestrec = false;
                 i++;
             } else if (line[col] == '2') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockheight, blockwidth, blockheight};
-                blocksarray[i].colour = GOLD; // Example: Set a unique color for chest blocks
+                blocksarray[i].chestrec = true;
+                blocksarray[i].cheststate = 0;
+                blocksarray[i].chestanimationframe = 0;
+                blocksarray[i].chestanimationtimer = 0.0f;
                 i++;
             } else if (line[col] == '3') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockheight, blockwidth, blockheight};
-                blocksarray[i].colour = RED; // Example: Set a unique color for enemy blocks
+                blocksarray[i].colour = RED; 
                 i++;
             }
         }
         row++;
     }
     fclose(Fileread);
-    return i; // Return the total number of blocks loaded
+    return i;
 }
 
-void drawobstacles(int* maxplatform, struct GameAssets* assets){
-    Rectangle sourceRect ={240, 48, 63,30};
+void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo* player) {
+    Rectangle sourceRect = {240, 48, 63, 30};
     Vector2 origin = {0, 0};
-    for (int i=0; i<*maxplatform; i++){
+    Texture2D chesttexture;
+
+    for (int i = 0; i < blockcount; i++) {
         DrawTexturePro(assets->texture[12], sourceRect, blocksarray[i].rect, origin, 0, WHITE);
+
+        if (blocksarray[i].chestrec) {
+            chesttexture = assets->texture[38];
+            Rectangle chestdest = {blocksarray[i].rect.x, blocksarray[i].rect.y - (assets->texture[38].height / 8) - 68, 130, 100};
+
+            // Check if the player is near the chest
+            if (player->Position.x + player->width > blocksarray[i].rect.x &&
+                player->Position.x < blocksarray[i].rect.x + blocksarray[i].rect.width &&
+                player->Position.y + player->height > blocksarray[i].rect.y - 50 &&
+                player->Position.y < blocksarray[i].rect.y + blocksarray[i].rect.height) {
+                DrawRectangleRounded((Rectangle){chestdest.x - 40, chestdest.y - 30, chestdest.width + 70, 40}, 20, 0, (Color){255, 255, 255, 100});
+                aligntextcentre(chestdest.x + chestdest.width / 2, chestdest.y - 10, 30, "Press E to Open", WHITE);
+
+                if (IsKeyPressed(KEY_E) && blocksarray[i].cheststate == 0) {
+                    blocksarray[i].cheststate = 1; 
+                    blocksarray[i].chestanimationframe = 0;
+                    blocksarray[i].chestanimationtimer = 0.0f;
+                }
+            }
+
+
+            if (blocksarray[i].cheststate == 1) {
+                blocksarray[i].chestanimationtimer += GetFrameTime();
+                if (blocksarray[i].chestanimationtimer >= 0.1f) { 
+                    blocksarray[i].chestanimationframe++;
+                    blocksarray[i].chestanimationtimer = 0.0f;
+
+                    if (blocksarray[i].chestanimationframe >= 9) { 
+                        blocksarray[i].cheststate = 2; 
+                        blocksarray[i].chestanimationframe = 9;
+                    }
+                }
+            }
+
+
+            int frameindex = blocksarray[i].chestanimationframe % 5;
+            int rowindex = blocksarray[i].chestanimationframe / 5; 
+
+            Rectangle chestsrc = {
+                frameindex * (assets->texture[38].width / 5), 
+                rowindex * (assets->texture[38].height / 8),  
+                assets->texture[38].width / 5,               
+                assets->texture[38].height / 8             
+            };
+
+            // Draw the chest
+            DrawTexturePro(chesttexture, chestsrc, chestdest, origin, 0, WHITE);
+        }
     }
 }
 
@@ -2109,9 +2406,11 @@ void randomenemypos(int* maxplatform, int enemyonblock[MAX_ENEMIES]){
 
 
 
-void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets){
+void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets, bool coinenemy, bool enemywithkey, struct Playerinfo* player){ 
     int framecount = 0;
     int frametimer = 0;
+    int coinframecount = 6;
+    int coinframetimer = 40;
     float dt = GetFrameTime();
     Texture2D texture;
 
@@ -2130,6 +2429,20 @@ void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets){
         frametimer = 10;
     }
     enemy->currentframe++;
+    assets->coincurrentframe++;
+
+    if (enemy->deadenemyremoved){
+        return;
+    }
+
+    if (assets->coinindex >= coinframecount){
+        assets->coincurrentframe = 0;
+        assets->coinindex = 0; 
+    }
+
+    if (assets->coincurrentframe % coinframetimer == 1 && assets->coinindex < coinframecount){
+        assets->coinindex++;
+    }
 
     if (enemy->animationstate == 2 && enemy->animationindex == 0) { //delay the attack animations, takes time to recharge
         enemy->animationtimer += dt;
@@ -2143,7 +2456,19 @@ void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets){
         enemy->animationindex = 5;
         enemy->deadtimer += dt; // Increment dead timer
         if (enemy->deadtimer >= 2.0f) {
-            enemy->dead = true; // Mark the enemy as dead after 2 seconds
+            if (!enemy->deadenemyremoved){
+                enemy->deadenemyremoved = true;
+            }
+            if (coinenemy){
+                if (player->currency + 300 <= MAX_CURRENCY){
+                    player->currency += 300;}
+                else{
+                    player->currency = MAX_CURRENCY;
+                }
+            }
+            if (enemywithkey){
+                addItemToInventory(player, 1);
+            }
             return;
         }
     }
@@ -2214,17 +2539,31 @@ void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets){
 
     Vector2 origin = {0, 0};
     DrawTexturePro(texture, sourceRect, destRect, origin, 0, WHITE);
+
+    Rectangle coinsrc = {assets->coinindex * (assets->texture[37].width/6), 0, assets->texture[37].width/6, assets->texture[37].height};
+    Rectangle coindest = {enemy->Position.x + 15, enemy->Position.y - 50, 80, 70};
+    Rectangle keysrc = {0, 0, assets->texture[36].width, assets->texture[36].height};
+    Rectangle keydest = {enemy->Position.x + 25, enemy->Position.y - 20, 50, 30};
+
+    if (coinenemy){
+        if (enemy->deadtimer != 0){
+            coindest.y += 120;
+            coindest.width += 30;
+            coindest.height += 30;
+        }
+        DrawTexturePro(assets->texture[37], coinsrc, coindest, origin, 0, WHITE);
+    }
+
+    if (enemywithkey){
+        if (enemy->deadtimer != 0){
+            keydest.y += 120;
+            keydest.width += 10;
+            keydest.height += 10;
+        }
+        DrawTexturePro(assets->texture[36], keysrc, keydest, origin, 0, WHITE);
+    }
     //printf("Animation State: %d, Frame: %d\n", enemy->animationstate, enemy->animationindex);
     //printf("%.2f, %.2f\n", destRect.width, destRect.height);
-}
-
-void removeDeadEnemies(struct Playerinfo enemies[MAX_ENEMIES], int* enemyCount) {
-    for (int i = 0; i < *enemyCount; i++) {
-        if (enemies[i].dead && enemies[i].deadtimer >= 5.0f) {
-            (*enemyCount)--;
-            i--; // Check the current index again as it now contains the next enemy
-        }
-    }
 }
 
 //have to randomise their positions on blovksarray
@@ -2311,115 +2650,103 @@ void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enem
     enemy->Position.x += dt * speed * enemy->facedirection;
 }
 
-void iteratearrowanimation(int facedirection, Texture2D texture, struct GameAssets* assets, Vector2* arrowPos,
-                            Vector2 enemypos, Rectangle rec, Rectangle playerHitbox, int blockCount, struct Playerinfo* player, bool* arrowActive, int playerlastframedirection) {
+void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* assets, Rectangle ground, Rectangle playerHitbox, int blockCount, struct Playerinfo* player, int playerlastframedirection){
     
     float dt = GetFrameTime();
     float rotationfactor;
-    static bool arrowMovingDown = false; 
-    static bool arrowonground = false;
-    static bool arrowonblock = false;
-    static bool arrowreflected = false;
     bool arrowdoesdamage = true;
-    static float arrowongroundtimer = 0.0f;
-    static float arrowonblocktimer = 0.0f;
-    static float arrowtimer = 0.0f;
-    static float arrowreflectedtimer = 0.0f;
-    static float speedX = 160.0f; 
-    static float speedY = 45.0f; 
-    static float arrowRotation = 0.0f;
-    arrowtimer += dt;
+    arrow->arrowtimer += dt;
 
-    if (!*arrowActive) {
-        arrowtimer = 0.0f; 
+
+    if (!arrow->active){
         return;
     }
 
-    if (arrowtimer >= 0.3f) {
-        arrowMovingDown = true; 
+    if (arrow->arrowtimer >= 0.3f) {
+        arrow->movingDown = true; 
     }
 
-    if (facedirection < 0){
-        speedX = -fabs(speedX); 
+    if (arrow->direction < 0){
+        arrow->speedX = -fabs(arrow->speedX); 
     }
-    arrowPos->x += speedX * dt;
-    if (arrowMovingDown && !arrowonground && !arrowonblock){
-        arrowPos->y += speedY * dt;
-        if (arrowRotation >= 20.0f){
+    arrow->position.x += arrow->speedX * dt;
+    if (arrow->movingDown && !arrow->arrowonground && !arrow->arrowonblock){
+        arrow->position.y += arrow->speedY * dt;
+        if (arrow->rotation >= 20.0f){
             rotationfactor = 0.05;
-        }else if (arrowreflected){
+        }else if (arrow->reflected){
             rotationfactor = 0.4;
         }else{
             rotationfactor = 0.2;
         }
-        arrowRotation += arrowtimer * rotationfactor;
-        printf("%.2f", arrowRotation);
+        arrow->rotation += arrow->arrowtimer * rotationfactor;
+        printf("%.2f", arrow->rotation);
     } 
 
     //printf("Playerdefense: %d\n", player->playerdefense);
     Rectangle src = {1, 0, 361, texture.height};
-    Rectangle dst = {arrowPos->x, arrowPos->y, src.width / 3.5, src.height / 3.5};
+    Rectangle dst = {arrow->position.x, arrow->position.y, src.width / 3.5, src.height / 3.5};
     Vector2 origin = {dst.width / 2.0f, dst.height / 2.0f};
-    Rectangle arrowtip = {arrowPos->x + dst.width / 2 - (arrowRotation * 0.45), arrowPos->y + (arrowRotation * 0.55) + 3, 4, 4}; //to offset the arrowtip hitbox
+    Rectangle arrowtip = {arrow->position.x + dst.width / 2 - (arrow->rotation * 0.45), arrow->position.y + (arrow->rotation * 0.55) + 3, 4, 4}; //to offset the arrowtip hitbox
 
-    if (facedirection < 0) {
+    if (arrow->direction < 0) {
         src.x += src.width;
         src.width = -fabs(src.width);
         dst.width = fabs(dst.width);
-        arrowtip.x = arrowPos->x - dst.width / 2 + (arrowRotation * 0.45);
+        arrowtip.x = arrow->position.x - dst.width / 2 + (arrow->rotation * 0.45);
     }
 
-    if (arrowreflected && !arrowonground && !arrowonblock) {
-        arrowreflectedtimer += dt;
-        speedX = -fabs(speedX + 50);
-        if (facedirection < 0){
-            speedX = 30;
+    if (arrow->reflected && !arrow->arrowonground && !arrow->arrowonblock) {
+        arrow->reflectedtimer += dt;
+        arrow->speedX = -fabs(arrow->speedX + 50);
+        if (arrow->direction < 0){
+            arrow->speedX = 30;
         }
     }
 
     for (int i = 0; i < blockCount; i++) {
         if (CheckCollisionRecs(arrowtip, blocksarray[i].rect)) { //////add timer for arrow on block
             printf("Arrow collided with block %d\n", i);
-            speedX = 0.0f;
-            speedY = 0.0f;
-            arrowMovingDown = false;
+            arrow->speedX = 0.0f;
+            arrow->speedY = 0.0f;
+            arrow->movingDown = false;
             arrowdoesdamage = false;
-            arrowonblock = true;
+            arrow->arrowonblock = true;
 
-            arrowonblocktimer += dt;
-            if (arrowonblocktimer >= 3.0f){
-                arrowonblock = false;
-                arrowonblocktimer = 0.0f;
-                arrowtimer = 0.0f;
-                *arrowActive = false; 
-                speedX = 140.0f;
-                speedY = 45.0f;
-                arrowRotation = 0.0f;
+            arrow->arrowonblocktimer += dt;
+            if (arrow->arrowonblocktimer >= 3.0f){
+                arrow->arrowonblock = false;
+                arrow->arrowonblocktimer = 0.0f;
+                arrow->arrowtimer = 0.0f;
+                arrow->active = false; 
+                arrow->speedX = 140.0f;
+                arrow->speedY = 45.0f;
+                arrow->rotation = 0.0f;
                 return;
             }
         }
     }
 
     // Check collision with the ground
-    if (CheckCollisionRecs(arrowtip, rec)) {
+    if (CheckCollisionRecs(arrowtip, ground)) {
         printf("Arrow collided with the ground.\n");
-        speedX = 0.0f;
-        speedY = 0.0f;
-        arrowMovingDown = false;
-        arrowonground = true;
+        arrow->speedX = 0.0f;
+        arrow->speedY = 0.0f;
+        arrow->movingDown = false;
+        arrow->arrowonground = true;
         arrowdoesdamage = false;
 
-        arrowongroundtimer += dt;
-        if (arrowongroundtimer >= 3.0f){
-            *arrowActive = false;
-            arrowongroundtimer = 0.0f; 
-            arrowreflectedtimer = 0.0f;
-            arrowreflected = false;
-            arrowtimer = 0.0f;
-            speedX = 140.0f;
-            speedY = 45.0f;
-            arrowRotation = 0.0f;
-            arrowonground = false;
+        arrow->arrowongroundtimer += dt;
+        if (arrow->arrowongroundtimer >= 3.0f){
+            arrow->active = false;
+            arrow->arrowongroundtimer = 0.0f; 
+            arrow->reflectedtimer = 0.0f;
+            arrow->reflected = false;
+            arrow->arrowtimer = 0.0f;
+            arrow->speedX = 140.0f;
+            arrow->speedY = 45.0f;
+            arrow->rotation = 0.0f;
+            arrow->arrowonground = false;
             return;
         }
     }
@@ -2428,23 +2755,23 @@ void iteratearrowanimation(int facedirection, Texture2D texture, struct GameAsse
         printf("Arrow collided with the player.\n");
 
         if (arrowdoesdamage){
-            if (player->onshield && (playerlastframedirection != facedirection)){
-                arrowreflected = true;
+            if (player->onshield && (playerlastframedirection != arrow->direction)){
+                arrow->reflected = true;
             }else{
                 player->currenthp -= (17.5 - player->playerdefense); 
-                *arrowActive = false; 
-                arrowtimer = 0.0f;
-                speedX = 140.0f;
-                speedY = 45.0f;
-                arrowRotation = 0.0f;
-                arrowonground = false;
+                arrow->active = false; 
+                arrow->arrowtimer = 0.0f;
+                arrow->speedX = 140.0f;
+                arrow->speedY = 45.0f;
+                arrow->rotation = 0.0f;
+                arrow->arrowonground = false;
                 return;
             }
         }
     }
 
     DrawRectangleRec(arrowtip, RED);
-    DrawTexturePro(texture, src, dst, origin, (arrowRotation) * facedirection, WHITE);
+    DrawTexturePro(texture, src, dst, origin, (arrow->rotation) * arrow->direction, WHITE);
 }
 
 void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], int facedirection) {
@@ -2555,6 +2882,7 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("Images/Key.png"); //36
     assets.images[assets.imagecount++] = LoadImage("Images/coin.png");
     assets.images[assets.imagecount++] = LoadImage("Images/Chests.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/Chestsbordered.png"); //39
 
     //assets.images[assets.imagecount++] = LoadImage("Landing_KG_2.gif");
 
@@ -2609,6 +2937,8 @@ int main()
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[0]); //35
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[36]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[37]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[38]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[39]); //39
 }
     
     struct Playerinfo Playerdata = {0};
@@ -2616,7 +2946,9 @@ int main()
     Gamestate currentGameState = MENU;
     Gamestate previousgamestate;
     int currentmusic, enemyonblock[MAX_ENEMIES]; 
-    int blockcount = loadmap("map.txt");
+    int blockcount;
+    
+    blockcount = loadmap("map.txt", &assets);
     int playerlastframedirection = 1;
     int playercurrentframe = 0;
     int playeranimationindex = 0;

@@ -254,7 +254,7 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->currenthp = 100;
     Playerdata->hitpoints = 100; //hp
     Playerdata->currency = 2000;
-    Playerdata->onground = true;
+    Playerdata->onground = false;
     Playerdata->onplatform = false;
     Playerdata->isJumping = false;
     Playerdata->isfalling = false;
@@ -680,10 +680,6 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
         SetMusicVolume(assets->music[*currentmusic], *musicVolume);
     }
     BeginMode2D(*camera);
-    if (!*gamedataloaded) {
-        *gamedataloaded = true;
-        loadgamedata(assets, Playerdata, currentGameState, currentmusic, musicVolume, enemycount, enemies, camera);
-    }
     for (int j = 1; j < 5; j++){
         if (j == 4){
             drawbackground(assets, camera, j, 0.7);
@@ -741,6 +737,7 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
 
     checkPlayerAttackCollision(Playerdata, enemies, *playerlastframedirection);
     //removeDeadEnemies(enemies, enemycount, Playerdata);
+    //printf("PlayerPosition: (%f, %f)\n", Playerdata->Position.x, Playerdata->Position.y);
     EndMode2D();
 
     if (IsKeyPressed(KEY_P)){
@@ -884,21 +881,21 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
 
     if (hoverborderdest.y >= 369 && hoverborderdest.y <= 468){
         if (player->inventoryrow2n3available[0][potionnum] == 1){
-            aligntextcentre(900, 600, 30, "Key. Collect this to unlock the", BLUE);
-            aligntextcentre(900, 640, 30, "door located at the Eastern. ", BLUE);
+            aligntextcentre(900, 650, 30, "Key. Collect this to unlock the", BLUE);
+            aligntextcentre(900, 690, 30, "door located at the Eastern. ", BLUE);
         }else if (player->inventoryrow2n3available[0][potionnum] == 2){
-            aligntextcentre(900, 600, 30, "Plated Armour. Wear this to", BLUE);
-            aligntextcentre(900, 640, 30, "triumph in battles. ", BLUE);
+            aligntextcentre(900, 650, 30, "Plated Armour. Wear this to", BLUE);
+            aligntextcentre(900, 690, 30, "triumph in battles. ", BLUE);
         }else if (player->inventoryrow2n3available[0][potionnum] == 3){
-            aligntextcentre(900, 600, 30, "Sharpened Sword. Believed to be", BLUE);
-            aligntextcentre(900, 640, 30, "made by the strongest blacksmith. ", BLUE);
+            aligntextcentre(900, 650, 30, "Sharpened Sword. Believed to be", BLUE);
+            aligntextcentre(900, 690, 30, "made by the strongest blacksmith. ", BLUE);
         }
     }
     if (potionnum < player->potioncount) {
         int type = player->potionorder[potionnum];
         if (player->potionbought[type] != 0) {
             if (hoverborderdest.y < 270){
-                aligntextcentre(1000, 600, 30, potiondesc[type], BLUE);
+                aligntextcentre(1000, 650, 30, potiondesc[type], BLUE);
             }
             if (IsKeyPressed(KEY_ENTER) && !potionuseconfirmation) {
                 potionuseconfirmation = true;
@@ -1644,6 +1641,7 @@ void shopstateanimation(struct GameAssets* assets){
 }
 
 void collisionplayerblocks(char axis, struct Playerinfo* object, int* maxplatform, int* facedirection) {
+    static int blockindex = -1;
     Rectangle player = {object->Position.x, object->Position.y, object->width, object->height};
 
     // **Hitboxes for Different Collisions**
@@ -1667,23 +1665,20 @@ void collisionplayerblocks(char axis, struct Playerinfo* object, int* maxplatfor
         feetHitbox.x -= 12; // Adjust slightly when facing left
     }
 
-    bool touchingPlatform = false;
     object->onplatform = false;
-
     for (int i = 0; i < *maxplatform; i++) {
         // Feet collision with the platform
-        if (axis == 'y' && CheckCollisionRecs(feetHitbox, blocksarray[i].rect)) {
-            touchingPlatform = true;
+        if (axis == 'y' && CheckCollisionRecs(feetHitbox, blocksarray[i].rect)){
+            object->onplatform = true;
+            blockindex = i; 
 
             if (object->velocityY >= 0) { // Falling down
                 object->Position.y = blocksarray[i].rect.y - object->height;
                 object->velocityY = 0;
                 object->isfalling = false;
-                object->onplatform = true;
                 object->isJumping = false;
             }
         }
-
         // Head collision with the platform
         if (axis == 'y' && CheckCollisionRecs(headHitbox, blocksarray[i].rect)) {
             if (object->velocityY < 0) { // Moving upwards
@@ -1708,10 +1703,11 @@ void collisionplayerblocks(char axis, struct Playerinfo* object, int* maxplatfor
         }
     }
 
-    if (!touchingPlatform) {
-        object->onplatform = false;
+    if (object->onplatform && axis == 'y'){
+        object->onground = false;
     }
-    
+    //printf("DEBUG for playerblock: onplatform=%d, onground=%d, isfalling=%d\n", object->onplatform, object->onground, object->isfalling);
+
 }
 
 int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct GameAssets *assets, Gamestate currentgamestate) {
@@ -1750,6 +1746,8 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
         player->potioneffect += dt;
     }
     if (IsKeyPressed(KEY_SPACE) && !player->isJumping && !player->attack && (player->onground || player->onplatform)){
+        player->onground = false;
+        player->onplatform = false;
         if (player->jumpboostshdact){ 
             if (!player->jumpboostactivated){
                 player->jumpboost = -700 * 1.5; //x1.5 jump height
@@ -1785,11 +1783,11 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
     player->Position.x += dt * speed * player->direction.x;
     collisionplayerblocks('x', player, maxplatform, &facedirection);
 
-    if ((!player->onplatform||!player->onground) && (!player->attack) &&!player->onshield) {  
+    if ((!player->onplatform && !player->onground) && (!player->attack) &&!player->onshield) {  
         player->isrunning = false;
         player->velocityY += gravity * dt;
 
-        if (player->velocityY >= 0) {
+        if (player->velocityY > 0) {
             player->isfalling = true;
             player->animationstate = 3; //falling animation
         } else {
@@ -1799,12 +1797,17 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
 
     if (!player->isJumping && !player->onground && !player->onplatform) {
         player->isfalling = true;
-        player->velocityY = 0;
+    } else if (player->velocityY == 0) {
+        player->isfalling = false;
     }
+    
     player->Position.y += player->velocityY * dt;
     collisionplayerblocks('y', player, maxplatform, &facedirection);
-    keepobjectwithinscreen(player, assets);
 
+    if (!player->onplatform && !player->onground && !player->isJumping){
+        player->isfalling = true;
+    }
+    keepobjectwithinscreen(player, assets);
     //printf("DEBUG: isfalling=%d, isjumping=%d, velocityY=%.2f\n", 
         //player->isfalling, player->isJumping, player->velocityY);
     if (player->animationstate == 2) { // If currently in a jump animation, let it finish before changing state
@@ -1831,13 +1834,12 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
             player->isrunning = false;
         }
     }
-
+    //printf("DEBUG for playerblock: onplatform=%d, onground=%d, isfalling=%d, animationstate=%d\n", player->onplatform, player->onground, player->isfalling, player->animationstate);
     if (player->direction.x > 0) {
          facedirection = 1;
     } else if (player->direction.x < 0) {
         facedirection = -1;
     }
-
     return facedirection;
 }
 
@@ -2045,6 +2047,7 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
     if (file) {
         fprintf(file, "PlayerPositionX=%.2f\n", Playerdata->Position.x);
         fprintf(file, "PlayerPositionY=%.2f\n", Playerdata->Position.y);
+        fprintf(file, "Playeranimationstate=%d\n", Playerdata->animationstate);
         fprintf(file, "PlayerIsJumping=%d\n", Playerdata->isJumping);
         fprintf(file, "PlayerIsFalling=%d\n", Playerdata->isfalling);
         fprintf(file, "PlayerVelocityY=%.2f\n", Playerdata->velocityY);
@@ -2111,6 +2114,8 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "PlayerPositionX=%f", &Playerdata->Position.x);
         }else if (strstr(line, "PlayerPositionY=")){
             sscanf(line, "PlayerPositionY=%f", &Playerdata->Position.y);
+        }else if (strstr(line, "Playeranimationstate=")){
+            sscanf(line, "Playeranimationstate=%d", &Playerdata->animationstate);
         }else if (strstr(line, "PlayerIsJumping=")){
             sscanf(line, "PlayerIsJumping=%d", &Playerdata->isJumping);
         }else if (strstr(line, "PlayerIsFalling=")){
@@ -2378,6 +2383,8 @@ void keepobjectwithinscreen(struct Playerinfo* object, struct GameAssets* assets
                 object->animationstate  = 0;
             }
         }*/
+    }else{
+        object->onground = false;
     }
 }
 
@@ -2703,7 +2710,7 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
 
     for (int i = 0; i < blockCount; i++) {
         if (CheckCollisionRecs(arrowtip, blocksarray[i].rect)) { //////add timer for arrow on block
-            printf("Arrow collided with block %d\n", i);
+            //printf("Arrow collided with block %d\n", i);
             arrow->speedX = 0.0f;
             arrow->speedY = 0.0f;
             arrow->movingDown = false;
@@ -2726,7 +2733,7 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
 
     // Check collision with the ground
     if (CheckCollisionRecs(arrowtip, ground)) {
-        printf("Arrow collided with the ground.\n");
+        //printf("Arrow collided with the ground.\n");
         arrow->speedX = 0.0f;
         arrow->speedY = 0.0f;
         arrow->movingDown = false;
@@ -2749,7 +2756,7 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
     }
 
     if (CheckCollisionRecs(arrowtip, playerHitbox)) {
-        printf("Arrow collided with the player.\n");
+        //printf("Arrow collided with the player.\n");
 
         if (arrowdoesdamage){
             if (player->onshield && (playerlastframedirection != arrow->direction)){

@@ -254,7 +254,7 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->currenthp = 100;
     Playerdata->hitpoints = 100; //hp
     Playerdata->currency = 2000;
-    Playerdata->onground = true;
+    Playerdata->onground = false;
     Playerdata->onplatform = false;
     Playerdata->isJumping = false;
     Playerdata->isfalling = false;
@@ -514,7 +514,7 @@ void handleLoadSaves(struct GameAssets* assets, struct Playerinfo* Playerdata, G
         ishovered = true;
         aligntextcentre(loadButton.x + loadButton.width / 2, loadButton.y + loadButton.height / 2, 30, "LOAD GAME", BLACK);
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            //initializeGameState(assets, Playerdata, currentGameState, currentmusic, musicVolume, playerlastframedirection);
+            initializeGameState(assets, Playerdata, currentGameState, currentmusic, musicVolume, playerlastframedirection);
             loadgamedata(assets, Playerdata, currentGameState, currentmusic, musicVolume, enemycount, enemies, camera);
             *currentGameState = PLAYING;
         }
@@ -737,7 +737,7 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
 
     checkPlayerAttackCollision(Playerdata, enemies, *playerlastframedirection);
     //removeDeadEnemies(enemies, enemycount, Playerdata);
-    printf("PlayerPosition: (%f, %f)\n", Playerdata->Position.x, Playerdata->Position.y);
+    //printf("PlayerPosition: (%f, %f)\n", Playerdata->Position.x, Playerdata->Position.y);
     EndMode2D();
 
     if (IsKeyPressed(KEY_P)){
@@ -1641,6 +1641,7 @@ void shopstateanimation(struct GameAssets* assets){
 }
 
 void collisionplayerblocks(char axis, struct Playerinfo* object, int* maxplatform, int* facedirection) {
+    //static int blockindex = -1;
     Rectangle player = {object->Position.x, object->Position.y, object->width, object->height};
 
     // **Hitboxes for Different Collisions**
@@ -1664,23 +1665,20 @@ void collisionplayerblocks(char axis, struct Playerinfo* object, int* maxplatfor
         feetHitbox.x -= 12; // Adjust slightly when facing left
     }
 
-    bool touchingPlatform = false;
     object->onplatform = false;
-
     for (int i = 0; i < *maxplatform; i++) {
         // Feet collision with the platform
-        if (axis == 'y' && CheckCollisionRecs(feetHitbox, blocksarray[i].rect)) {
-            touchingPlatform = true;
+        if (axis == 'y' && CheckCollisionRecs(feetHitbox, blocksarray[i].rect)){
+            object->onplatform = true;
+            //blockindex = i; 
 
             if (object->velocityY >= 0) { // Falling down
                 object->Position.y = blocksarray[i].rect.y - object->height;
                 object->velocityY = 0;
                 object->isfalling = false;
-                object->onplatform = true;
                 object->isJumping = false;
             }
         }
-
         // Head collision with the platform
         if (axis == 'y' && CheckCollisionRecs(headHitbox, blocksarray[i].rect)) {
             if (object->velocityY < 0) { // Moving upwards
@@ -1705,10 +1703,10 @@ void collisionplayerblocks(char axis, struct Playerinfo* object, int* maxplatfor
         }
     }
 
-    if (!touchingPlatform) {
-        object->onplatform = false;
+    if (object->onplatform && axis == 'y'){
+        object->onground = false;
     }
-
+    //printf("DEBUG for playerblock: onplatform=%d, onground=%d, isfalling=%d\n", object->onplatform, object->onground, object->isfalling);
 
 }
 
@@ -1748,6 +1746,8 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
         player->potioneffect += dt;
     }
     if (IsKeyPressed(KEY_SPACE) && !player->isJumping && !player->attack && (player->onground || player->onplatform)){
+        player->onground = false;
+        player->onplatform = false;
         if (player->jumpboostshdact){ 
             if (!player->jumpboostactivated){
                 player->jumpboost = -700 * 1.5; //x1.5 jump height
@@ -1783,7 +1783,7 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
     player->Position.x += dt * speed * player->direction.x;
     collisionplayerblocks('x', player, maxplatform, &facedirection);
 
-    if ((!player->onplatform||!player->onground) && (!player->attack) &&!player->onshield) {  
+    if ((!player->onplatform && !player->onground) && (!player->attack) &&!player->onshield) {  
         player->isrunning = false;
         player->velocityY += gravity * dt;
 
@@ -1797,14 +1797,15 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
 
     if (!player->isJumping && !player->onground && !player->onplatform) {
         player->isfalling = true;
-        player->velocityY = 0;
-    }else{
+    } else if (player->velocityY == 0) {
         player->isfalling = false;
     }
+    
     player->Position.y += player->velocityY * dt;
     collisionplayerblocks('y', player, maxplatform, &facedirection);
-    keepobjectwithinscreen(player, assets);
 
+
+    keepobjectwithinscreen(player, assets);
     //printf("DEBUG: isfalling=%d, isjumping=%d, velocityY=%.2f\n", 
         //player->isfalling, player->isJumping, player->velocityY);
     if (player->animationstate == 2) { // If currently in a jump animation, let it finish before changing state
@@ -1831,13 +1832,12 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
             player->isrunning = false;
         }
     }
-
+    //printf("DEBUG for playerblock: onplatform=%d, onground=%d, isfalling=%d, animationstate=%d\n", player->onplatform, player->onground, player->isfalling, player->animationstate);
     if (player->direction.x > 0) {
          facedirection = 1;
     } else if (player->direction.x < 0) {
         facedirection = -1;
     }
-
     return facedirection;
 }
 
@@ -2381,6 +2381,8 @@ void keepobjectwithinscreen(struct Playerinfo* object, struct GameAssets* assets
                 object->animationstate  = 0;
             }
         }*/
+    }else{
+        object->onground = false;
     }
 }
 
@@ -2689,6 +2691,11 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
     Vector2 origin = {dst.width / 2.0f, dst.height / 2.0f};
     Rectangle arrowtip = {arrow->position.x + dst.width / 2 - (arrow->rotation * 0.45), arrow->position.y + (arrow->rotation * 0.55) + 3, 4, 4}; //to offset the arrowtip hitbox
 
+    if (arrow->arrowtimer <= 0.1f){ //ensure that the arrow hits the player if the player is right in front
+        arrowtip.x -= 70;
+        arrowtip.width += 70;
+    }
+
     if (arrow->direction < 0) {
         src.x += src.width;
         src.width = -fabs(src.width);
@@ -2706,7 +2713,7 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
 
     for (int i = 0; i < blockCount; i++) {
         if (CheckCollisionRecs(arrowtip, blocksarray[i].rect)) { //////add timer for arrow on block
-            printf("Arrow collided with block %d\n", i);
+            //printf("Arrow collided with block %d\n", i);
             arrow->speedX = 0.0f;
             arrow->speedY = 0.0f;
             arrow->movingDown = false;
@@ -2729,7 +2736,7 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
 
     // Check collision with the ground
     if (CheckCollisionRecs(arrowtip, ground)) {
-        printf("Arrow collided with the ground.\n");
+        //printf("Arrow collided with the ground.\n");
         arrow->speedX = 0.0f;
         arrow->speedY = 0.0f;
         arrow->movingDown = false;
@@ -2752,7 +2759,7 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
     }
 
     if (CheckCollisionRecs(arrowtip, playerHitbox)) {
-        printf("Arrow collided with the player.\n");
+        //printf("Arrow collided with the player.\n");
 
         if (arrowdoesdamage){
             if (player->onshield && (playerlastframedirection != arrow->direction)){

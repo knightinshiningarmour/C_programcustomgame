@@ -46,6 +46,9 @@ struct GameAssets
     float src_shieldx[7];
     float src_shieldy[7];
     float src_shieldwidth[7];
+    float src_dyingx[5];
+    float src_dyingy[5];
+    float src_dyingwidth[5];
 
     int frameCount;                // Total frames in this animation
     float frameSpeed; 
@@ -173,7 +176,7 @@ int calculatemovementplayer(struct Playerinfo* player, int* maxplatform, struct 
 void updatecamera(Camera2D* camera, struct Playerinfo* player);
 void keepobjectwithinscreen(struct Playerinfo* object, struct GameAssets* assets);
 void LoadAnimationDataplayer(struct GameAssets* assets);
-void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player, int* currentframecount, int* facedirection, int* i);
+void iterateanimationplayer(Gamestate* currentGameState, struct GameAssets* assets, struct Playerinfo* player, int* currentframecount, int* facedirection);
 void enemymovement(struct Playerinfo* enemy, struct Playerinfo* player, int enemyonblock[MAX_ENEMIES], int enemyIndex, struct GameAssets* assets);
 void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets, bool coinenemy, bool enemywithkey, struct Playerinfo* player);
 void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], int facedirection);
@@ -188,7 +191,7 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
 void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, Gamestate* previousgamestate);
 void handleLoadSaves(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, bool *gamedataloaded, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], int* playerlastframedirection, int blockcount);
 void handleOptionsState(struct GameAssets* assets, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Gamestate* previousgamestate);
-void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, Camera2D* camera, int* blockcount, int* playerlastframedirection, int* playercurrentframe, int* playeranimationindex, 
+void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, Camera2D* camera, int* blockcount, int* playerlastframedirection, int* playercurrentframe, 
     int enemyonblock[MAX_ENEMIES], struct Playerinfo enemies[MAX_ENEMIES], int* enemycount, int* currentmusic, bool* gamedataloaded,float* musicVolume, Gamestate* previousgamestate);
 void drawbuttonsplayingstate(struct GameAssets* assets, Camera2D* camera, Gamestate* currentGameState, struct Playerinfo* Playerdata);
 void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, Gamestate* previousgamestate, int* currentmusic, float* musicVolume);
@@ -202,7 +205,7 @@ void addItemToInventory(struct Playerinfo* player, ItemType itemType);
 
 
 void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
-                        int* playerlastframedirection, int* playercurrentframe, int* playeranimationindex, int enemyonblock[MAX_ENEMIES], 
+                        int* playerlastframedirection, int* playercurrentframe, int enemyonblock[MAX_ENEMIES], 
                         struct Playerinfo enemies[MAX_ENEMIES], int* enemycount, int* currentmusic){
 
     switch (*currentGameState){
@@ -226,7 +229,7 @@ void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, 
             break;
         case PLAYING:
             handlePlayingState(assets, Playerdata, currentGameState, camera, blockcount, playerlastframedirection, playercurrentframe, 
-                               playeranimationindex, enemyonblock, enemies, enemycount, currentmusic, &gamedataloaded, &musicVolume, previousgamestate);
+                               enemyonblock, enemies, enemycount, currentmusic, &gamedataloaded, &musicVolume, previousgamestate);
             break;
         case INVENTORY:
             handleInventorystate(assets, Playerdata, currentGameState, previousgamestate, currentmusic, &musicVolume);
@@ -260,6 +263,8 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->isfalling = false;
     Playerdata->attack = false;
     Playerdata->onshield = false;
+    Playerdata->dead = false;
+    Playerdata->deadtimer = 0.0f;
     Playerdata->playerdamage = 1; //attack
     Playerdata->playerdefense = 5; //defense
     Playerdata->animationstate = 0;
@@ -423,14 +428,13 @@ void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, G
     drawtrees(assets, 3, 0, 310, 4);
 
     static int currentframe = 0;
-    static int animationindex = 0;
     static int facedirection = 1;
     Playerdata->animationstate = 0; 
     Playerdata->Position.x = windwidth/2 - Playerdata->width/2;
     Playerdata->Position.y = 250 - Playerdata->height; 
     Playerdata->width *= 3;
     Playerdata->height *= 3;  
-    iterateanimationplayer(assets, Playerdata, &currentframe, &facedirection, &animationindex);
+    iterateanimationplayer(NULL, assets, Playerdata, &currentframe, &facedirection);
     
     for (int i = 0; i < 2; i++) {
         enemies[i].Position.x = 200 + i * 100; // Spread enemies horizontally
@@ -658,7 +662,7 @@ void handleOptionsState(struct GameAssets* assets, Gamestate* currentGameState, 
     }
 }
 
-void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, Camera2D* camera, int* blockcount, int* playerlastframedirection, int* playercurrentframe, int* playeranimationindex, 
+void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, Camera2D* camera, int* blockcount, int* playerlastframedirection, int* playercurrentframe, 
                         int enemyonblock[MAX_ENEMIES], struct Playerinfo enemies[MAX_ENEMIES], int* enemycount, int* currentmusic, bool* gamedataloaded, float* musicVolume, Gamestate* previousgamestate)
 {
     static float cointimer = 0.0f;
@@ -696,7 +700,7 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
     *playerlastframedirection = calculatemovementplayer(Playerdata, blockcount, assets, *currentGameState);
     updatecamera(camera, Playerdata);
     keepobjectwithinscreen(Playerdata, assets);
-    iterateanimationplayer(assets, Playerdata, playercurrentframe, playerlastframedirection, playeranimationindex);
+    iterateanimationplayer(currentGameState, assets, Playerdata, playercurrentframe, playerlastframedirection);
     
     Texture2D arrowtexture = assets->texture[18];
     Rectangle ground = {0, windheight - assets->texture[13].height * 0.7, mapwidth, assets->texture[13].height * 0.7};
@@ -736,7 +740,8 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
     }
 
     checkPlayerAttackCollision(Playerdata, enemies, *playerlastframedirection);
-    //removeDeadEnemies(enemies, enemycount, Playerdata);
+    printf("Player animation index: %d\n", Playerdata->animationstate);
+    printf("Playerhp: %d, Playerdead: %d\n", Playerdata->currenthp, Playerdata->dead);
     //printf("PlayerPosition: (%f, %f)\n", Playerdata->Position.x, Playerdata->Position.y);
     EndMode2D();
 
@@ -1641,7 +1646,7 @@ void shopstateanimation(struct GameAssets* assets){
 }
 
 void collisionplayerblocks(char axis, struct Playerinfo* object, int* maxplatform, int* facedirection) {
-    static int blockindex = -1;
+    //static int blockindex = -1;
     Rectangle player = {object->Position.x, object->Position.y, object->width, object->height};
 
     // **Hitboxes for Different Collisions**
@@ -1670,7 +1675,7 @@ void collisionplayerblocks(char axis, struct Playerinfo* object, int* maxplatfor
         // Feet collision with the platform
         if (axis == 'y' && CheckCollisionRecs(feetHitbox, blocksarray[i].rect)){
             object->onplatform = true;
-            blockindex = i; 
+            //blockindex = i; 
 
             if (object->velocityY >= 0) { // Falling down
                 object->Position.y = blocksarray[i].rect.y - object->height;
@@ -1718,6 +1723,10 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
     static float timelapsed = 0.0f;
 
     if (currentgamestate != PLAYING){
+        return facedirection;
+    }
+
+    if(player->currenthp <= 0){ 
         return facedirection;
     }
 
@@ -1804,9 +1813,7 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
     player->Position.y += player->velocityY * dt;
     collisionplayerblocks('y', player, maxplatform, &facedirection);
 
-    if (!player->onplatform && !player->onground && !player->isJumping){
-        player->isfalling = true;
-    }
+
     keepobjectwithinscreen(player, assets);
     //printf("DEBUG: isfalling=%d, isjumping=%d, velocityY=%.2f\n", 
         //player->isfalling, player->isJumping, player->velocityY);
@@ -1907,11 +1914,21 @@ void LoadAnimationDataplayer(struct GameAssets* assets) {
             fscanf(file, "width = %f, %f, %f, %f, %f, %f, %f\n", &assets->src_shieldwidth[0], &assets->src_shieldwidth[1], &assets->src_shieldwidth[2],
                     &assets->src_shieldwidth[3], &assets->src_shieldwidth[4], &assets->src_shieldwidth[5], &assets->src_shieldwidth[6]);
         } 
+
+        if (strstr(line, "dying animations:")) 
+        {
+            fscanf(file, "srcx = %f, %f, %f, %f, %f\n", &assets->src_dyingx[0], &assets->src_dyingx[1], &assets->src_dyingx[2], 
+                    &assets->src_dyingx[3], &assets->src_dyingx[4]);
+            fscanf(file, "srcy = %f, %f, %f, %f, %f\n", &assets->src_dyingy[0], &assets->src_dyingy[1], &assets->src_dyingy[2], 
+                    &assets->src_dyingy[3], &assets->src_dyingy[4]);
+            fscanf(file, "width = %f, %f, %f, %f, %f\n", &assets->src_dyingwidth[0], &assets->src_dyingwidth[1], &assets->src_dyingwidth[2],
+                    &assets->src_dyingwidth[3], &assets->src_dyingwidth[4]);
+        } 
     }
     fclose(file);
 }
 
-void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player, int* currentframecount, int* facedirection, int* i) {
+void iterateanimationplayer(Gamestate* currentGameState, struct GameAssets* assets, struct Playerinfo* player, int* currentframecount, int* facedirection) {
     int framescount = 0;
     int frametimer = 0;
     Texture2D texture;
@@ -1947,29 +1964,40 @@ void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player
         framescount = 7;
         frametimer = 4;
     }
+    
+    else if (player->animationstate == 6){ //dying
+        player->deadtimer += GetFrameTime();
+        framescount = 5;
+        frametimer = 30;
+    }
+
+    if (player->deadtimer > 5.0f){
+        *currentGameState = GAMEOVER;
+    }
     (*currentframecount)++;
 
     if (*currentframecount % (frametimer) == 1) {
-        (*i)++;
+        (player->animationindex)++;
         *currentframecount = 2;
     }
 
-    if (*i >= framescount) {
+    if (player->animationindex >= framescount){
         if (player->animationstate == 4) { // If attacking, reset attack state after animation completes
-            *i = 0;
+            player->animationindex = 0;
             player->attack = false; // Reset attack flag
         }
-        else if (player->animationstate == 5) //if shielding, maintain the last frame
+        else if (player->animationstate == 5) 
         {
-            *i = framescount - 1;
-        }
-        else 
+            player->animationindex = 6;
+        }else if (player->animationstate == 6 && player->deadtimer <= 8.0f){
+            player->animationindex = 4;
+        }else 
         {
-            *i = 0;
+            player->animationindex = 0;
             if (player->animationstate == 2 && player->isJumping) //let the character jumping frame to iterate till it finishes jumping
             {
                 player->animationstate = 2;
-                *i = 3;
+                player->animationindex = 3;
             }
         }
 
@@ -1982,50 +2010,51 @@ void iterateanimationplayer(struct GameAssets* assets, struct Playerinfo* player
 
     if (player->animationstate == 0) {  // Idle Animation
         texture = assets->texture[1];
-        sourceRect = (Rectangle){assets->src_idlex[*i], assets->src_idley[*i], 50, 61};
-    } 
-    
-    else if (player->animationstate == 1) // Running Animation
+        sourceRect = (Rectangle){assets->src_idlex[player->animationindex], assets->src_idley[player->animationindex], 50, 61};
+    }else if (player->animationstate == 1) // Running Animation
     {  
         texture = assets->texture[0];
-        sourceRect = (Rectangle){assets->src_runningx[*i], assets->src_runningy[*i], assets->src_runningwidth[*i],
-                                 assets->texture[0].height - assets->src_runningy[*i]};
-    } 
-
-    else if (player->animationstate == 2) // Jumping Animation
+        sourceRect = (Rectangle){assets->src_runningx[player->animationindex], assets->src_runningy[player->animationindex], assets->src_runningwidth[player->animationindex],
+                                 assets->texture[0].height - assets->src_runningy[player->animationindex]};
+    }else if (player->animationstate == 2) // Jumping Animation
     {  
         texture = assets->texture[3];
-        sourceRect = (Rectangle){assets->src_jumpingx[*i], assets->src_jumpingy[*i], assets->src_jumpingwidth[*i], assets->src_jumpingheight[*i]};
-    }
-
-    else if (player->animationstate == 3) // falling Animation
+        sourceRect = (Rectangle){assets->src_jumpingx[player->animationindex], assets->src_jumpingy[player->animationindex], assets->src_jumpingwidth[player->animationindex], assets->src_jumpingheight[player->animationindex]};
+    }else if (player->animationstate == 3) // falling Animation
     {
         texture = assets->texture[2];
-        sourceRect = (Rectangle){assets->src_fallingx[*i], assets->src_fallingy[*i], 50, 57};
-    }
-
-    else if (player->animationstate == 4){
+        sourceRect = (Rectangle){assets->src_fallingx[player->animationindex], assets->src_fallingy[player->animationindex], 50, 57};
+    }else if (player->animationstate == 4){
         player->attack = true;
         texture = assets->texture[4];
-        sourceRect = (Rectangle){assets->src_attackingx[*i], assets->src_attackingy[*i], 
-                      assets->src_attackingwidth[*i], assets->texture[4].height - assets->src_attackingy[*i]};
+        sourceRect = (Rectangle){assets->src_attackingx[player->animationindex], assets->src_attackingy[player->animationindex], 
+                      assets->src_attackingwidth[player->animationindex], assets->texture[4].height - assets->src_attackingy[player->animationindex]};
     
         //printf("Attack Animation Frame: %d, Attack Flag: %d\n", *i, player->attack); // Debugging print
-        if (*i == 5){
-            *i = 0;
+        if (player->animationindex == 5){
+            player->animationindex = 0;
             player->attack = false; //think abt how to make the fifth frame iterate finish 
         }
-    }
-
-    else if (player->animationstate == 5) // falling Animation
+    }else if (player->animationstate == 5) // falling Animation
     {
         texture = assets->texture[5];
-        sourceRect = (Rectangle){assets->src_shieldx[*i], assets->src_shieldy[*i], assets->src_shieldwidth[*i], 
-                                 assets->texture[5].height - assets->src_shieldy[*i]};
+        sourceRect = (Rectangle){assets->src_shieldx[player->animationindex], assets->src_shieldy[player->animationindex], assets->src_shieldwidth[player->animationindex], 
+                                 assets->texture[5].height - assets->src_shieldy[player->animationindex]};
     }
     player->width = 100;
     player->height = 100;
     destRect = (Rectangle){player->Position.x, player->Position.y, player->width, player->height};
+
+    if (player->animationstate == 6) // dying Animation
+    {
+        texture = assets->texture[40];
+        sourceRect = (Rectangle){assets->src_dyingx[player->animationindex], assets->src_dyingy[player->animationindex], assets->src_dyingwidth[player->animationindex], 
+                                 assets->texture[40].height - assets->src_dyingy[player->animationindex]};
+        
+        player->width += 10.0f * player->animationindex;
+        player->height -= 10.0f * player->animationindex;
+        destRect = (Rectangle){player->Position.x, player->Position.y + (10.0f * player->animationindex), player->width, player->height};
+    }
 
     if (*facedirection < 0) {
         sourceRect.width = -fabs(sourceRect.width);
@@ -2055,6 +2084,8 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
         fprintf(file, "PlayerOnPlatform=%d\n", Playerdata->onplatform);
         fprintf(file, "PlayerHealth=%d\n", Playerdata->currenthp);
         fprintf(file, "PlayerMaxHealth=%d\n", Playerdata->hitpoints);
+        fprintf(file, "Playerdead=%d\n", Playerdata->dead);
+        fprintf(file, "Playerdeadtimer=%.2f\n", Playerdata->deadtimer);
         fprintf(file, "Playerattackdamage=%d\n", Playerdata->playerdamage);
         fprintf(file, "Playerdefense=%d\n", Playerdata->playerdefense);
         fprintf(file, "Playerjumpheight=%d\n", Playerdata->jumpboost);
@@ -2130,6 +2161,10 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "PlayerHealth=%d", &Playerdata->currenthp);
         }else if (strstr(line, "PlayerMaxHealth=")){
             sscanf(line, "PlayerMaxHealth=%d", &Playerdata->hitpoints);
+        }else if (strstr(line, "Playerdead=")){
+            sscanf(line, "Playerdead=%d", &Playerdata->dead);
+        }else if (strstr(line, "Playerdeadtimer=")){
+            sscanf(line, "Playerdeadtimer=%d", &Playerdata->deadtimer);
         }else if (strstr(line, "Playerattackdamage=")){
             sscanf(line, "Playerattackdamage=%d", &Playerdata->playerdamage);
         }else if (strstr(line, "Playerdefense=")){
@@ -2345,10 +2380,12 @@ void keepobjectwithinscreen(struct Playerinfo* object, struct GameAssets* assets
         object->isfalling = false;
         object->onground = true;
 
-        if (!object->attack && !object->isJumping) {
-            if (!object->isrunning && !object->onshield) {
+        if (!object->attack && !object->isJumping){
+            if (object->currenthp <= 0){
+                object->animationstate = 6;
+            }else if (!object->isrunning && !object->onshield) {
                 object->animationstate = 0; // Idle
-            } else if (object->isrunning && !object->onshield) {
+            }else if (object->isrunning && !object->onshield) {
                 object->animationstate = 1; // Running
             }
         }
@@ -2661,7 +2698,6 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
     bool arrowdoesdamage = true;
     arrow->arrowtimer += dt;
 
-
     if (!arrow->active){
         return;
     }
@@ -2684,7 +2720,6 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
             rotationfactor = 0.2;
         }
         arrow->rotation += arrow->arrowtimer * rotationfactor;
-        printf("%.2f", arrow->rotation);
     } 
 
     //printf("Playerdefense: %d\n", player->playerdefense);
@@ -2692,6 +2727,11 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
     Rectangle dst = {arrow->position.x, arrow->position.y, src.width / 3.5, src.height / 3.5};
     Vector2 origin = {dst.width / 2.0f, dst.height / 2.0f};
     Rectangle arrowtip = {arrow->position.x + dst.width / 2 - (arrow->rotation * 0.45), arrow->position.y + (arrow->rotation * 0.55) + 3, 4, 4}; //to offset the arrowtip hitbox
+
+    if (arrow->arrowtimer <= 0.1f){ //ensure that the arrow hits the player if the player is right in front
+        arrowtip.x -= 70;
+        arrowtip.width += 70;
+    }
 
     if (arrow->direction < 0) {
         src.x += src.width;
@@ -2702,7 +2742,7 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
 
     if (arrow->reflected && !arrow->arrowonground && !arrow->arrowonblock) {
         arrow->reflectedtimer += dt;
-        arrow->speedX = -fabs(arrow->speedX + 50);
+        arrow->speedX = -fabs(arrow->speedX + 100);
         if (arrow->direction < 0){
             arrow->speedX = 30;
         }
@@ -2757,7 +2797,6 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
 
     if (CheckCollisionRecs(arrowtip, playerHitbox)) {
         //printf("Arrow collided with the player.\n");
-
         if (arrowdoesdamage){
             if (player->onshield && (playerlastframedirection != arrow->direction)){
                 arrow->reflected = true;
@@ -2774,6 +2813,13 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
         }
     }
 
+    if (player->currenthp <= 0 && !player->dead){
+        player->dead = true;
+        player->animationstate = 6;
+        player->deadtimer = 0.0f;
+        player->animationindex = 0;
+        player->currentframe = 0;
+    }
     DrawRectangleRec(arrowtip, RED);
     DrawTexturePro(texture, src, dst, origin, (arrow->rotation) * arrow->direction, WHITE);
 }
@@ -2784,6 +2830,8 @@ void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo ene
     
     if (!player->attack) {
         return; // No need to check for collisions if the player is not attacking
+    }else if (player->dead){
+        return;
     }
 
     if (facedirection > 0){
@@ -2824,13 +2872,16 @@ void checkPlayerAttackCollision(struct Playerinfo* player, struct Playerinfo ene
 
 void playerenemyhpbar(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], struct GameAssets* assets, int enemyCount, Camera2D* camera) {        
     int playerhpindex = (player->hitpoints - player->currenthp)/12.5;
+    if (playerhpindex >= 7){
+        playerhpindex = 7;
+    }
     /*else if (playerhpdiff < 0) { //if the player is healed
         playerhpindex--;
         if (playerhpindex < 0) {
             playerhpindex = 0; 
         }
     }*/
-    Rectangle playerhpsrc = {337 - (48 * playerhpindex), 1, 46, 14};
+    Rectangle playerhpsrc = {337 - ((assets->texture[21].width/8) * playerhpindex), 1, assets->texture[21].width/8, 14};
     Rectangle playerhpdest = {camera->target.x - 550, camera->target.y - 350, playerhpsrc.width * 3, playerhpsrc.height * 3};
     Vector2 origin = {0, 0};
 
@@ -2887,6 +2938,7 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("Images/coin.png");
     assets.images[assets.imagecount++] = LoadImage("Images/Chests.png");
     assets.images[assets.imagecount++] = LoadImage("Images/Chestsbordered.png"); //39
+    assets.images[assets.imagecount++] = LoadImage("Images/Dying_KG_1.png");
 
     //assets.images[assets.imagecount++] = LoadImage("Landing_KG_2.gif");
 
@@ -2943,6 +2995,7 @@ int main()
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[37]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[38]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[39]); //39
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[40]);
 }
     
     struct Playerinfo Playerdata = {0};
@@ -2955,7 +3008,6 @@ int main()
     blockcount = loadmap("map.txt", &assets);
     int playerlastframedirection = 1;
     int playercurrentframe = 0;
-    int playeranimationindex = 0;
     int enemycount = MAX_ENEMIES;
     float musicVolume;
     randomenemypos(&blockcount, enemyonblock);
@@ -2967,7 +3019,7 @@ int main()
         BeginDrawing();
         ClearBackground(RAYWHITE);
         handleGameState(&currentGameState, &previousgamestate, &camera, &assets, &Playerdata, &blockcount, 
-                        &playerlastframedirection, &playercurrentframe, &playeranimationindex, 
+                        &playerlastframedirection, &playercurrentframe, 
                         enemyonblock, enemies, &enemycount, &currentmusic);
     
         EndDrawing();

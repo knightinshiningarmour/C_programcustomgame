@@ -31,3 +31,8 @@ srcx = 11, 111, 211, 315, 416, 513, 618
 srcy = 3, 3, 6, 8, 8, 8, 8
 width = 56, 60, 63, 58, 54, 58, 53
 height = textureheight - srcy
+
+dying animations: 5
+srcx = 26, 105, 207, 309, 409
+srcy = 4, 11, 17, 28, 41
+width = 39, 57, 62, 63, 70

@@ -106,6 +106,9 @@ struct Playerinfo
     int currenthp;
     int facedirection;
     int currency;
+    int accumulatedcurrency;
+    float alivetimer;
+    float alivetimercompare;
     float deadtimer;
 
     int potionbought[4];
@@ -115,6 +118,7 @@ struct Playerinfo
     int rowspacing;
     int potioncount;
     int activepotiontype;
+    int potionused;
     int playerdefense;
     bool defenseboostshdact;
     float jumpboost;
@@ -124,6 +128,9 @@ struct Playerinfo
     float potioneffect;
 
     int keycount;
+    int successfulparry;
+    int damagetaken;
+    int enemykilled;
 };
 
 struct ShopItem {
@@ -202,6 +209,8 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
 void shopstateanimation(struct GameAssets* assets);
 void drawInventory2n3row(struct GameAssets* assets, struct Playerinfo* player, Rectangle playerinvenboxes[12]);
 void addItemToInventory(struct Playerinfo* player, ItemType itemType);
+void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, struct Playerinfo enemies[MAX_ENEMIES], int* enemycount);
+void gameoverOverview(struct Playerinfo* Playerdata, struct GameAssets* assets, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], char action);
 
 
 void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
@@ -241,10 +250,7 @@ void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, 
             handlePauseState(assets, Playerdata, currentGameState, previousgamestate, currentmusic, &musicVolume, enemycount, enemies, camera, &gamedataloaded);
             break;
         case GAMEOVER:
-            DrawText("Game Over. Press ENTER to Restart", windwidth / 2 - 150, windheight / 2, 20, BLACK);
-            if (IsKeyPressed(KEY_ENTER)){
-                *currentGameState = MENU;
-            }
+            handleGameOverState(assets, Playerdata, currentGameState, currentmusic, &musicVolume, camera, enemies, enemycount);
             break;
     }
 }
@@ -257,6 +263,7 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->currenthp = 100;
     Playerdata->hitpoints = 100; //hp
     Playerdata->currency = 2000;
+    Playerdata->accumulatedcurrency = 0;
     Playerdata->onground = false;
     Playerdata->onplatform = false;
     Playerdata->isJumping = false;
@@ -271,6 +278,11 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->potioncount = 0;
     Playerdata->potioneffect = 0.0f;
     Playerdata->activepotiontype = -1;
+    Playerdata->potionused = 0;
+    Playerdata->alivetimer = 0.0f;
+    Playerdata->alivetimercompare = 0.0f;
+    Playerdata->successfulparry = 0;
+    Playerdata->damagetaken = 0;
     Playerdata->keycount = 0;
     assets->shopkeycount = 1;
     assets->shopkeyprice = 500;
@@ -293,7 +305,7 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
             }
         }
     }
-    *currentGameState = MENU;
+    *currentGameState = GAMEOVER;
     *currentmusic = -1; 
     *musicVolume = 0.5f;
     *lastframedirection = 1;
@@ -670,11 +682,13 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
     bool playerpostracked;
     *previousgamestate = PLAYING;
 
+    Playerdata->alivetimer += dt;
     cointimer += dt;
     if (cointimer >= 1.0f) {
         cointimer = 0.0f;
         if (Playerdata->currency + 2 <= MAX_CURRENCY)
             Playerdata->currency += 2;
+            Playerdata->accumulatedcurrency += 2;
     }
 
     if (*currentmusic != 0) { 
@@ -987,6 +1001,7 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
         if (canusepotion){
             player->potionbought[potiontype]--;
             player->activepotiontype = potiontype;
+            player->potionused++;
         }
         
         potionuseconfirmation = false;
@@ -1277,6 +1292,134 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
     }
 }
 
+void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, struct Playerinfo enemies[MAX_ENEMIES], int* enemycount){
+    Rectangle homebuttonsrc = {65, 34, 91, 97};
+    Rectangle homebuttondest = {50, 50, 100, 100};
+    //Rectangle emptybuttonsrc = {0, 2, assets->texture[23].width, 27};
+    //Rectangle emptybuttondest = {450, 250, 300, 100};
+    Rectangle playerdeadsrc = {assets->src_dyingx[4], assets->src_dyingy[4], assets->src_dyingwidth[4], assets->texture[40].height - assets->src_dyingy[4]};
+    Rectangle playerdeaddest = {windwidth/2 - 500, windheight - (128 * 0.8) - 80, playerdeadsrc.width * 3.5, 80};
+    Vector2 mousePos = GetMousePosition();
+
+    float dt = GetFrameTime();
+    static int playerlastframedirection = 1;
+    static int currentframe = 0;
+    static int displayingtextindex = 0;
+    static float timelapsed = 0.0f;
+    static bool gameoverviewloaded = false;
+    char text[100];
+
+    if (!gameoverviewloaded){
+        gameoverOverview(player, assets, *enemycount, enemies, 'w');
+        gameoverOverview(player, assets, *enemycount, enemies, 'r');
+        gameoverviewloaded = true;
+    }
+    if (*currentmusic != 3) { 
+        *currentmusic = 3;
+        StopMusicStream(assets->music[*currentmusic]);
+        PlayMusicStream(assets->music[3]);
+        SetMusicVolume(assets->music[*currentmusic], *musicVolume * 1.5);
+    }
+
+    for (int j = 1; j < 5; j++){
+        drawbackground(assets, camera, j, 0.8);
+    }
+
+    if (mousePos.x >= homebuttondest.x && mousePos.x <= homebuttondest.x + homebuttondest.width
+        && mousePos.y >= homebuttondest.y && mousePos.y <= homebuttondest.y +homebuttondest.height){
+        homebuttonsrc.x = 181;
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
+            initializeGameState(assets, player, currentGameState, currentmusic, musicVolume, &playerlastframedirection);
+            *currentGameState = MENU;
+            gameoverviewloaded = false;
+            currentframe = 0;
+            timelapsed = 0.0f;
+        }
+    }else if (IsKeyPressed(KEY_ENTER)){
+        initializeGameState(assets, player, currentGameState, currentmusic, musicVolume, &playerlastframedirection);
+        *currentGameState = MENU;
+        gameoverviewloaded = false;
+    }
+
+    //DrawText("Game Over. Press ENTER to Restart", windwidth / 2 - 150, windheight / 2, 20, BLACK);
+    drawtrees(assets, 3, 200, windheight-(128*0.8)-(100 * 5) + 2, 5);
+    drawtrees(assets, 6, 500, windheight-(128*0.8) + 2, 6);
+    aligntextcentre(500+(27 * 6)/2, windheight - (128 * 0.8) - (28 * 6) + 40, 22, "In Memories", BEIGE);
+    DrawTexturePro(assets->texture[31], homebuttonsrc, homebuttondest, (Vector2){0,0}, 0, WHITE);
+    DrawTexturePro(assets->texture[40], playerdeadsrc, playerdeaddest, (Vector2){0, 0}, 0.0f, (Color){213, 213, 213, 255});
+    for (int i = 0; i<3; i++){
+        drawtrees(assets, 1, 500 + (60*i), windheight-(128*0.8) + 2, 4);
+        drawtrees(assets, 4, 1000 + (60*i), windheight-(128*0.8) + 2, 4);
+        if (i <= 2){
+            drawtrees(assets, 4, 320 + (60*i), windheight-(128*0.8) + 2, 3);
+            drawtrees(assets, 5, 270 - (80 * i), 600 - (30 * i), 4);
+        }
+    }
+
+    switch (displayingtextindex){
+        case 0:
+            if (player->alivetimer >= player->alivetimercompare){
+                sprintf(text, "Your current playthrough alive time is: %.2fs.\n\n\nThis is your all time best.\n\n\nPress -> or <- to continue.", player->alivetimer);
+            }else if (player->alivetimer < player->alivetimercompare){
+                sprintf(text, "Your current playthrough alive time is: %.2fs.\n\n\nYour all time best is: %.2fs.\n\n\nPress -> or <- to continue.", player->alivetimer, player->alivetimercompare);
+            }
+            break;
+
+        case 1:
+            if (player->accumulatedcurrency >= 2000){
+                sprintf(text, "You have accumulated a total of %d coins.\n\n\nYou are truly a one-of-a-kind money collector.\n\n\nPress -> or <- to continue.", player->accumulatedcurrency);
+            }else{
+                sprintf(text, "You have accumulated a total of %d coins.\n\n\nYou're truly one of a kind... at missing money.\n\n\nPress -> or <- to continue.", player->accumulatedcurrency);
+            }
+            break;
+
+        case 2:
+            if (player->potionused >= 5){
+                sprintf(text, "You have used a total of %d potions.\n\n\nPotion count: embarrassing. Were you bathing in them?\n\n\nPress -> or <- to continue.", player->potionused);
+            }else{
+                sprintf(text, "You have used a total of %d potions.\n\n\nMinimal potion use? You're built different.\n\n\nPress -> or <- to continue.", player->potionused);
+            }
+            break;
+
+        case 3:
+            if (player->enemykilled >= MAX_ENEMIES - 2){
+                sprintf(text, "Your kill count in this run: %d.\n\n\nSlayer stats unlocked: that kill count speaks for itself.\n\n\nPress -> or <- to continue.", player->enemykilled);
+            }else{
+                sprintf(text, "Your kill count in this run: %d.\n\n\nEnemies killed: barely. Did you miss them on purpose?\n\n\nPress -> or <- to continue.", player->enemykilled);
+            }
+            break;
+
+        case 4:
+            if (player->damagetaken >= 300){
+                sprintf(text, "Damage taken: %d. The more you took, the stronger you became.\n\n\n You took everything like a boss.\n\n\nPress -> or <- to continue.", player->damagetaken);
+            }else{
+                sprintf(text, "Damage taken: %d. You barely took any damage but still die.\n\n\nAre you playing without a shield?\n\n\nPress -> or <- to continue.", player->damagetaken);
+            }
+            break;
+
+        case 5:
+            if (player->successfulparry >= 10){
+                sprintf(text, "Successful parry this run: %d. Perfect!\n\n\nYou read their move and countered like a master.\n\n\nPress -> or <- to continue.", player->successfulparry);
+            }else{
+                sprintf(text, "Successful parry this run: %d.\n\n\nMissed that parry by a mile? Better luck next time!\n\n\nPress -> or <- to continue.", player->successfulparry);
+            }
+            break;
+    }
+
+    if (IsKeyPressed(KEY_RIGHT)){
+        displayingtextindex++;
+        if (displayingtextindex > 5){
+            displayingtextindex = 0;
+        }
+    }else if (IsKeyPressed(KEY_LEFT)){
+        displayingtextindex--;
+        if (displayingtextindex < 0){
+            displayingtextindex = 5;
+        }
+    }
+    DrawRectangleRec((Rectangle){220, 30, windwidth - 230, 150}, (Color){210, 210, 210, 160});
+    aligntextcentre(windwidth/2 + 100, windheight/2 - 340, 30, text, BLACK);
+}
 
 
 void aligntextcentre(int x, int y, int fontsize, const char* text, Color color) {
@@ -1293,25 +1436,55 @@ void rotatetextcentre(const char* text, Vector2 position, int fontSize, float ro
 }
 
 void drawtrees(struct GameAssets* assets, int i, int destx, int desty, int scalefactor){
-    if (i == 1){    // big tree in background.png
-        Rectangle tree1src = {201, 7 , 108, 73};
-        Rectangle tree1dest = {destx, desty, tree1src.width*scalefactor, tree1src.height*scalefactor};
+    float dt = GetFrameTime();
+    static float leafOffset = -80.0f;
+    static float timer = 0.0f; 
+    static float leafcooldown = 0.0f;    
+    
+    if (i == 1){    // grass1
+        Rectangle grasswithflowerssrc = {263, 234, 20, 22};
+        Rectangle grasswithflowersdest = {destx, desty - (grasswithflowerssrc.height*scalefactor), grasswithflowerssrc.width*scalefactor, grasswithflowerssrc.height*scalefactor};
         Vector2 origin = {0, 0};
-        DrawTexturePro(assets->texture[8], tree1src, tree1dest, origin, 0, WHITE);
-    }
-
-    else if (i == 2){
+        DrawTexturePro(assets->texture[10], grasswithflowerssrc, grasswithflowersdest, origin, 0, WHITE);
+    }else if (i == 2){
         Rectangle tree2src = {17, 12 , 73, assets->texture[9].height - tree2src.y};
         Rectangle tree2dest = {destx, desty, tree2src.width*scalefactor, tree2src.height*scalefactor};
         Vector2 origin = {0, 0};
         DrawTexturePro(assets->texture[9], tree2src, tree2dest, origin, 0, WHITE);
-    }
-
-    else if (i == 3){
+    }else if (i == 3){
         Rectangle pinktreesrc = {245, 12, 72, 100};
         Rectangle pinktreedest = {destx, desty, pinktreesrc.width*scalefactor, pinktreesrc.height*scalefactor};
         Vector2 origin = {0, 0};
         DrawTexturePro(assets->texture[10], pinktreesrc, pinktreedest, origin, 0, WHITE);
+    }else if (i == 4){
+        Rectangle grasssrc2 = {215, 235, 24, 21};
+        Rectangle grassdest2 = {destx, desty - (grasssrc2.height*scalefactor), grasssrc2.width*scalefactor, grasssrc2.height*scalefactor};
+        Vector2 origin = {0, 0};
+        DrawTexturePro(assets->texture[10], grasssrc2, grassdest2, origin, 0, WHITE);
+    }else if (i == 5){ //falling leaves
+        timer += dt;
+        if (leafcooldown > 0.0f){
+            leafcooldown -= dt;
+            return;
+        }
+        if (timer >= 0.1f && leafcooldown <= 0.0f){
+            leafOffset += 1.0f;
+            timer = 0.0f;      
+        }
+        if (leafOffset >= windheight - (128*0.8) - desty){ 
+            leafOffset = -80.0f;   
+            leafcooldown = 3.0f;   
+            return;
+        }
+        Rectangle fallingleavessrc = {249, 214, 25, 15};
+        Rectangle fallingleavesdest = {destx - leafOffset + 40, desty + leafOffset - (fallingleavessrc.height*scalefactor), fallingleavessrc.width*scalefactor, fallingleavessrc.height*scalefactor};
+        Vector2 origin = {0, 0};
+        DrawTexturePro(assets->texture[10], fallingleavessrc, fallingleavesdest, origin, 0, WHITE);
+    }else if (i == 6){
+        Rectangle noticeboardsrc = {228, 180, 22, 28};
+        Rectangle noticeboarddest = {destx, desty - (noticeboardsrc.height*scalefactor), 30 + noticeboardsrc.width*scalefactor, noticeboardsrc.height*scalefactor};
+        Vector2 origin = {0, 0};
+        DrawTexturePro(assets->texture[10], noticeboardsrc, noticeboarddest, origin, 0, WHITE);
     }
 }
 
@@ -2071,7 +2244,7 @@ void iterateanimationplayer(Gamestate* currentGameState, struct GameAssets* asse
 
 }
 
-void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Gamestate* currentGameState, int* currentmusic, float musicVolume, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera) {
+void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Gamestate* currentGameState, int* currentmusic, float musicVolume, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera){
     FILE *file = fopen("savegame.txt", "w");
     if (file) {
         fprintf(file, "PlayerPositionX=%.2f\n", Playerdata->Position.x);
@@ -2085,11 +2258,13 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
         fprintf(file, "PlayerHealth=%d\n", Playerdata->currenthp);
         fprintf(file, "PlayerMaxHealth=%d\n", Playerdata->hitpoints);
         fprintf(file, "Playerdead=%d\n", Playerdata->dead);
+        fprintf(file, "Playeralivetimer=%.2f\n", Playerdata->alivetimer);
         fprintf(file, "Playerdeadtimer=%.2f\n", Playerdata->deadtimer);
         fprintf(file, "Playerattackdamage=%d\n", Playerdata->playerdamage);
         fprintf(file, "Playerdefense=%d\n", Playerdata->playerdefense);
         fprintf(file, "Playerjumpheight=%d\n", Playerdata->jumpboost);
         fprintf(file, "PlayerCurrency=%d\n", Playerdata->currency);
+        fprintf(file, "Playeraccumulatedcurrency=%d\n", Playerdata->accumulatedcurrency);
         fprintf(file, "MusicVolume=%.2f\n", musicVolume);
         fprintf(file, "EnemyCount=%d\n", enemycount);
         for (int i = 0; i < enemycount; i++) {
@@ -2107,6 +2282,7 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
             fprintf(file, "Potion %d bought: %d\n", i+1, Playerdata->potionbought[i]);
             fprintf(file, "Potion %d remaining: %d\n", i+1, assets->potionleftinshop[i]);
         }
+        fprintf(file, "Potionused=%d\n", Playerdata->potionused);
 
         for (int i = 2; i<=3; i++){
             for (int j = 0; j < 4; j++){
@@ -2125,6 +2301,8 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
         fprintf(file, "Potionactivetype=%d\n", Playerdata->activepotiontype);
         fprintf(file, "Numberofkeys=%d\n", Playerdata->keycount);
         fprintf(file, "Shopkeycount=%d\n", assets->shopkeycount);
+        fprintf(file, "Playersuccessfulparry=%d\n", Playerdata->successfulparry);
+        fprintf(file, "Playerdamagetaken=%d\n", Playerdata->damagetaken);
 
         fclose(file);
     }
@@ -2163,6 +2341,8 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "PlayerMaxHealth=%d", &Playerdata->hitpoints);
         }else if (strstr(line, "Playerdead=")){
             sscanf(line, "Playerdead=%d", &Playerdata->dead);
+        }else if (strstr(line, "Playeralivetimer=")){
+            sscanf(line, "Playeralivetimer=%.2f", &Playerdata->alivetimer);
         }else if (strstr(line, "Playerdeadtimer=")){
             sscanf(line, "Playerdeadtimer=%d", &Playerdata->deadtimer);
         }else if (strstr(line, "Playerattackdamage=")){
@@ -2173,6 +2353,8 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "Playerjumpheight=%d", &Playerdata->jumpboost);
         }else if (strstr(line, "PlayerCurrency=")){
             sscanf(line, "PlayerCurrency=%d", &Playerdata->currency);
+        }else if (strstr(line, "Playeraccumulatedcurrency=")){
+            sscanf(line, "Playeraccumulatedcurrency=%d", &Playerdata->accumulatedcurrency);
         }else if (strstr(line, "MusicVolume=")){
             sscanf(line, "MusicVolume=%f", musicVolume);
         }else if (strstr(line, "EnemyCount=")){
@@ -2209,7 +2391,9 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
                 sscanf(line, "Potion %d remaining: %d", &i, &assets->potionleftinshop[i]);
             }
         }
-
+        if (strstr(line, "Potionused=")){
+            sscanf(line, "Potionused=%d", &Playerdata->potionused);
+        }
         for (int i = 2; i<=3; i++){
             for (int j = 0; j < 4; j++){
                 char inventoryKey[30];
@@ -2250,6 +2434,10 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "Numberofkeys=%d", &Playerdata->keycount);
         }else if(strstr(line, "Shopkeycount=")){
             sscanf(line, "Shopkeycount=%d", &assets->shopkeycount);
+        }else if(strstr(line, "Playersuccessfulparry=")){
+            sscanf(line, "Playersuccessfulparry=%d", &Playerdata->successfulparry);
+        }else if(strstr(line, "Playerdamagetaken=")){
+            sscanf(line, "Playerdamagetaken=%d", &Playerdata->damagetaken);
         }
     }
     fclose(file);
@@ -2257,6 +2445,65 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
 
 
     
+}
+
+void gameoverOverview(struct Playerinfo* Playerdata, struct GameAssets* assets, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], char action){
+    
+    if (action == 'w'){
+        FILE *fileread = fopen("gameoverview.txt", "r"); //read the longest alive time
+        if (fileread) {
+            char line[50];
+            while (fgets(line, sizeof(line), fileread)){
+                if (strstr(line, "Playerlongestalivetime=")) {
+                    sscanf(line, "Playerlongestalivetime=%.2f", &Playerdata->alivetimercompare);
+                }
+            }
+            fclose(fileread);}
+
+        FILE *file = fopen("gameoverview.txt", "w");
+        for (int i = 0; i < enemycount; i++){
+            if (enemies[i].dead == 1){
+                Playerdata->enemykilled++;
+            }
+        }
+        if (Playerdata->alivetimer > Playerdata->alivetimercompare){
+            Playerdata->alivetimercompare = Playerdata->alivetimer;
+        }
+
+        if (file){
+            fprintf(file, "Playerlongestalivetime=%.2f\n", Playerdata->alivetimercompare);
+            fprintf(file, "Playeralivetimer=%.2f\n", Playerdata->alivetimer);
+            fprintf(file, "Playeraccumulatedcurrency=%d\n", Playerdata->accumulatedcurrency);
+            fprintf(file, "Playerpotionused=%d\n", Playerdata->potionused);
+            fprintf(file, "Enemykilled=%d\n", Playerdata->enemykilled);
+            fprintf(file, "Playerdamagetaken=%d\n", Playerdata->damagetaken);
+            fprintf(file, "Playersuccessfulparry=%d\n", Playerdata->successfulparry);
+            fclose(file);
+        }
+    }else if (action == 'r'){
+        FILE *file = fopen("gameoverview.txt", "r");
+        if (file){
+            char line[100];
+            while (fgets(line, sizeof(line), file)){
+                if (strstr(line, "Playerlongestalivetime=")){
+                    sscanf(line, "Playerlongestalivetime=%.2f", &Playerdata->alivetimercompare);
+                }else if (strstr(line, "Playeralivetimer=")){
+                    sscanf(line, "Playeralivetimer=%.2f", &Playerdata->alivetimer);
+                }else if (strstr(line, "Playeraccumulatedcurrency=")){
+                    sscanf(line, "Playeraccumulatedcurrency=%d", &Playerdata->accumulatedcurrency);
+                }else if (strstr(line, "Playerpotionused=")){
+                    sscanf(line, "Playerpotionused=%d", &Playerdata->potionused);
+                }else if (strstr(line, "Enemykilled=")){
+                    sscanf(line, "Enemykilled=%d", &Playerdata->enemykilled);
+                }else if (strstr(line, "Playerdamagetaken=")){
+                    sscanf(line, "Playerdamagetaken=%d", &Playerdata->damagetaken);
+                }else if (strstr(line, "Playersuccessfulparry=")){
+                    sscanf(line, "Playersuccessfulparry=%d", &Playerdata->successfulparry);
+                }
+            }
+            fclose(file);
+        }
+    }
 }
 
 int loadmap(const char* filename, struct GameAssets* assets){
@@ -2800,8 +3047,10 @@ void iteratearrowanimation(Arrow* arrow, Texture2D texture, struct GameAssets* a
         if (arrowdoesdamage){
             if (player->onshield && (playerlastframedirection != arrow->direction)){
                 arrow->reflected = true;
+                player->successfulparry++;
             }else{
-                player->currenthp -= (17.5 - player->playerdefense); 
+                player->currenthp -= (17.5 - player->playerdefense);
+                player->damagetaken += (17.5 - player->playerdefense); 
                 arrow->active = false; 
                 arrow->arrowtimer = 0.0f;
                 arrow->speedX = 140.0f;
@@ -2945,6 +3194,7 @@ int main()
     assets.music[assets.musiccount++] = LoadMusicStream("Music/13 Always With Me_ Spirited Away (Pi.mp3");
     assets.music[assets.musiccount++] = LoadMusicStream("Music/homemusic.mp3");
     assets.music[assets.musiccount++] = LoadMusicStream("Music/shop_music.mp3"); //2
+    assets.music[assets.musiccount++] = LoadMusicStream("Music/gameover_music.mp3");
 
     assets.sound[assets.soundcount++] = LoadSound("Music/Menu_Hover.mp3");
     //assets.sound[assets.soundcount++] = LoadSound("Music/Menu_Hover.mp3");

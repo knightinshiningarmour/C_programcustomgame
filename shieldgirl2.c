@@ -2987,3 +2987,42 @@ int main()
     CloseWindow();
     return 0;
 }
+
+
+
+/*    Rectangle homebuttonsrc = {65, 34, 91, 97};
+    Rectangle homebuttondest = {50, 50, 100, 100};
+    Rectangle emptybuttonsrc = {0, 2, assets->texture[23].width, 27};
+    Rectangle emptybuttondest = {450, 250, 300, 100};
+    Rectangle playerdeadsrc = {assets->src_dyingx[4], assets->src_dyingy[4], assets->src_dyingwidth[4], assets->texture[40].height - assets->src_dyingy[4]};
+    Rectangle playerdeaddest = {windwidth/2 - 500, windheight - (128 * 1.0) - 100, playerdeadsrc.width * 4, 100};
+    Vector2 mousePos = GetMousePosition();
+
+    player->animationstate = 1;
+    float dt = GetFrameTime();
+    static int currentframe = 0;
+    static float timelapsed = 0.0f;
+
+    for (int j = 1; j < 5; j++){
+        drawbackground(assets, camera, j, 1.0);
+    }
+    if (IsKeyPressed(KEY_ENTER)){
+        initializeGameState(assets, player, currentGameState, currentmusic, musicVolume, playerlastframedirection);
+        *currentGameState = MENU;
+    }
+
+    if (mousePos.x >= homebuttondest.x && mousePos.x <= homebuttondest.x + homebuttondest.width
+        && mousePos.y >= homebuttondest.y && mousePos.y <= homebuttondest.y +homebuttondest.height){
+        homebuttonsrc.x = 181;
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
+            initializeGameState(assets, player, currentGameState, currentmusic, musicVolume, playerlastframedirection);
+            *currentGameState = MENU;
+            currentframe = 0;
+            timelapsed = 0.0f;
+            return;
+        }
+    }
+    DrawTexturePro(assets->texture[23], emptybuttonsrc, emptybuttondest, (Vector2){0, 0}, 0.0f, WHITE);
+    DrawTexturePro(assets->texture[31], homebuttonsrc, homebuttondest, (Vector2){0,0}, 0, WHITE);
+    DrawTexturePro(assets->texture[40], playerdeadsrc, playerdeaddest, (Vector2){0, 0}, 0.0f, (Color){213, 213, 213, 255});
+    iterateanimationplayer(currentGameState, assets, player, &currentframe, playerlastframedirection);*/

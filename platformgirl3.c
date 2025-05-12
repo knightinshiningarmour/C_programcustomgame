@@ -63,6 +63,9 @@ struct GameAssets
 
     int coincurrentframe;
     int coinindex;
+    bool doorkeyinserted[4];
+    int doorkeycircledrawn[4];
+    int doorkeyinsertedcount;
 };
 
 struct Playerinfo 
@@ -125,12 +128,14 @@ struct Playerinfo
     bool jumpboostshdact;
     bool jumpboostactivated;
     bool attackboostshdact;
+    bool won;
     float potioneffect;
 
     int keycount;
     int successfulparry;
     int damagetaken;
     int enemykilled;
+    float timelapsed;
 };
 
 struct ShopItem {
@@ -211,7 +216,7 @@ void drawInventory2n3row(struct GameAssets* assets, struct Playerinfo* player, R
 void addItemToInventory(struct Playerinfo* player, ItemType itemType);
 void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, struct Playerinfo enemies[MAX_ENEMIES], int* enemycount);
 void gameoverOverview(struct Playerinfo* Playerdata, struct GameAssets* assets, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], char action);
-
+void lockeddoor(struct GameAssets* assets, struct Playerinfo* player);
 
 void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
                         int* playerlastframedirection, int* playercurrentframe, int enemyonblock[MAX_ENEMIES], 
@@ -257,7 +262,7 @@ void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, 
 
 void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* lastframedirection){
     // Initialize player data
-    Playerdata->Position = (Vector2){windwidth / 2 - 50, windheight - 100};
+    Playerdata->Position = (Vector2){2000, windheight - 100};
     Playerdata->width = 50;
     Playerdata->height = 50;
     Playerdata->currenthp = 100;
@@ -271,6 +276,7 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->attack = false;
     Playerdata->onshield = false;
     Playerdata->dead = false;
+    Playerdata->won = false;
     Playerdata->deadtimer = 0.0f;
     Playerdata->playerdamage = 1; //attack
     Playerdata->playerdefense = 5; //defense
@@ -283,7 +289,9 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->alivetimercompare = 0.0f;
     Playerdata->successfulparry = 0;
     Playerdata->damagetaken = 0;
-    Playerdata->keycount = 0;
+    Playerdata->keycount = 4;
+    Playerdata->timelapsed = 0.0f;
+    assets->doorkeyinsertedcount = 0;
     assets->shopkeycount = 1;
     assets->shopkeyprice = 500;
 
@@ -294,6 +302,8 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->defenseboostshdact = false;
 
     for (int i = 0; i<4; i++){
+        assets->doorkeyinserted[i] = false;
+        assets->doorkeycircledrawn[i] = 0;
         Playerdata->potionbought[i] = 0;
         Playerdata->potionorder[i] = 0;
         Playerdata->row2n3invencount = 0;
@@ -305,7 +315,7 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
             }
         }
     }
-    *currentGameState = GAMEOVER;
+    *currentGameState = MENU;
     *currentmusic = -1; 
     *musicVolume = 0.5f;
     *lastframedirection = 1;
@@ -438,6 +448,7 @@ void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, G
     drawbackground(assets, camera, 4, 0.7f);
     shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
     drawtrees(assets, 3, 0, 310, 4);
+    drawtrees(assets, 5, 60, 650, 3);
 
     static int currentframe = 0;
     static int facedirection = 1;
@@ -711,6 +722,7 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
     playerenemyhpbar(Playerdata, enemies, assets, *enemycount, camera);
     drawobstacles(*blockcount, assets, Playerdata);
     shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
+    lockeddoor(assets, Playerdata);
     *playerlastframedirection = calculatemovementplayer(Playerdata, blockcount, assets, *currentGameState);
     updatecamera(camera, Playerdata);
     keepobjectwithinscreen(Playerdata, assets);
@@ -754,9 +766,6 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
     }
 
     checkPlayerAttackCollision(Playerdata, enemies, *playerlastframedirection);
-    printf("Player animation index: %d\n", Playerdata->animationstate);
-    printf("Playerhp: %d, Playerdead: %d\n", Playerdata->currenthp, Playerdata->dead);
-    //printf("PlayerPosition: (%f, %f)\n", Playerdata->Position.x, Playerdata->Position.y);
     EndMode2D();
 
     if (IsKeyPressed(KEY_P)){
@@ -799,29 +808,6 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
     ClearBackground((Color){206, 250, 255, 0});
     DrawTexturePro(assets->texture[33], invenvbordersrc, invenborderdest, (Vector2){0,0}, 0, WHITE);
     DrawTexturePro(assets->texture[35], rocksrc, rockdest, (Vector2){0,0}, 0, WHITE);
-
-    //if (speedboost){
-        //player->
-    //}
-/*else if (attackdamageboost){
-        potioneffect += dt;
-        if (potioneffect <= 20.0f){
-            player->playerdamage = 2;
-        }else{
-            player->playerdamage = 1;
-            potioneffect = 0.0f;
-            attackdamageboost = false;
-        }
-    } else if (defenseboost){
-        potioneffect += dt;
-        if (potioneffect <= 20.0f){
-            player->playerdefense = 10;
-        }else{
-            player->playerdefense = 5;
-            potioneffect = 0.0f;
-            defenseboost = false;
-        }
-    }*/
 
     if (CheckCollisionPointRec(mousepos, homebuttondest)){
         homebuttonsrc.x = 173;
@@ -1295,8 +1281,6 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
 void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, struct Playerinfo enemies[MAX_ENEMIES], int* enemycount){
     Rectangle homebuttonsrc = {65, 34, 91, 97};
     Rectangle homebuttondest = {50, 50, 100, 100};
-    //Rectangle emptybuttonsrc = {0, 2, assets->texture[23].width, 27};
-    //Rectangle emptybuttondest = {450, 250, 300, 100};
     Rectangle playerdeadsrc = {assets->src_dyingx[4], assets->src_dyingy[4], assets->src_dyingwidth[4], assets->texture[40].height - assets->src_dyingy[4]};
     Rectangle playerdeaddest = {windwidth/2 - 500, windheight - (128 * 0.8) - 80, playerdeadsrc.width * 3.5, 80};
     Vector2 mousePos = GetMousePosition();
@@ -1341,7 +1325,6 @@ void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, G
         gameoverviewloaded = false;
     }
 
-    //DrawText("Game Over. Press ENTER to Restart", windwidth / 2 - 150, windheight / 2, 20, BLACK);
     drawtrees(assets, 3, 200, windheight-(128*0.8)-(100 * 5) + 2, 5);
     drawtrees(assets, 6, 500, windheight-(128*0.8) + 2, 6);
     aligntextcentre(500+(27 * 6)/2, windheight - (128 * 0.8) - (28 * 6) + 40, 22, "In Memories", BEIGE);
@@ -1592,9 +1575,11 @@ void drawInventory2n3row(struct GameAssets* assets, struct Playerinfo* player, R
 
         switch (player->inventoryrow2n3available[y-1][x]){
             case KEY:
-                Rectangle keysrc = {0, 0, assets->texture[36].width, assets->texture[36].height};
-                Rectangle keydest = {slotRect.x + 20, slotRect.y + 20, 65, 45};
-                DrawTexturePro(assets->texture[36], keysrc, keydest, (Vector2){0, 0}, 0.0f, WHITE);
+                if (player->keycount > 0){
+                    Rectangle keysrc = {0, 0, assets->texture[36].width, assets->texture[36].height};
+                    Rectangle keydest = {slotRect.x + 20, slotRect.y + 20, 65, 45};
+                    DrawTexturePro(assets->texture[36], keysrc, keydest, (Vector2){0, 0}, 0.0f, WHITE);
+                }
                 break;
             case ARMOR:
                 break;
@@ -1603,13 +1588,14 @@ void drawInventory2n3row(struct GameAssets* assets, struct Playerinfo* player, R
             default:
                 break;
         }
-
                 //20,10,60,80
         switch (player->inventoryrow2n3available[y-1][x]){
             case KEY:
+            if (player->keycount > 0){
                 sprintf(keyCountText, "x%d", player->keycount);
                 DrawText(keyCountText, slotRect.x + 55, slotRect.y + 60, 40, BLACK);
                 break;
+            }
             case ARMOR:
                 break;
             case SWORD:
@@ -1927,7 +1913,7 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
     if (player->jumpboostshdact){
         player->potioneffect += dt;
     }
-    if (IsKeyPressed(KEY_SPACE) && !player->isJumping && !player->attack && (player->onground || player->onplatform)){
+    if (IsKeyPressed(KEY_SPACE) && !player->isJumping){
         player->onground = false;
         player->onplatform = false;
         if (player->jumpboostshdact){ 
@@ -2268,19 +2254,19 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
         fprintf(file, "MusicVolume=%.2f\n", musicVolume);
         fprintf(file, "EnemyCount=%d\n", enemycount);
         for (int i = 0; i < enemycount; i++) {
-            fprintf(file, "Enemy%dPositionX=%.2f\n", i, enemies[i].Position.x);
-            fprintf(file, "Enemy%dPositionY=%.2f\n", i, enemies[i].Position.y);
-            fprintf(file, "Enemy%dHealth=%d\n", i, enemies[i].hitpoints);
-            fprintf(file, "Enemy%dDead=%d\n", i, enemies[i].dead);
-            fprintf(file, "Enemy%disremoved=%d\n", i, enemies[i].deadenemyremoved);
+            fprintf(file, "Enemy[%d]PositionX=%.2f\n", i, enemies[i].Position.x);
+            fprintf(file, "Enemy[%d]PositionY=%.2f\n", i, enemies[i].Position.y);
+            fprintf(file, "Enemy[%d]Health=%d\n", i, enemies[i].hitpoints);
+            fprintf(file, "Enemy[%d]Dead=%d\n", i, enemies[i].dead);
+            fprintf(file, "Enemy[%d]isremoved=%d\n", i, enemies[i].deadenemyremoved);
         }
         fprintf(file, "CameraTargetX=%.2f\n", camera->target.x);
         fprintf(file, "CameraTargetY=%.2f\n", camera->target.y);
         fprintf(file, "CameraZoom=%.2f\n", camera->zoom);
         for (int i = 0; i < 4; i++){
-            fprintf(file, "Potion %d price: %d\n", i+1, assets->potionprice[i]);
-            fprintf(file, "Potion %d bought: %d\n", i+1, Playerdata->potionbought[i]);
-            fprintf(file, "Potion %d remaining: %d\n", i+1, assets->potionleftinshop[i]);
+            fprintf(file, "Potion[%d]price: %d\n", i+1, assets->potionprice[i]);
+            fprintf(file, "Potion[%d]bought: %d\n", i+1, Playerdata->potionbought[i]);
+            fprintf(file, "Potion[%d]remaining: %d\n", i+1, assets->potionleftinshop[i]);
         }
         fprintf(file, "Potionused=%d\n", Playerdata->potionused);
 
@@ -2300,6 +2286,11 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
         fprintf(file, "Potioneffecttimer=%.2f\n", Playerdata->potioneffect); 
         fprintf(file, "Potionactivetype=%d\n", Playerdata->activepotiontype);
         fprintf(file, "Numberofkeys=%d\n", Playerdata->keycount);
+        fprintf(file, "Doorkeyinserted=%d\n", assets->doorkeyinsertedcount);
+        for (int i = 0; i<4; i++){
+            fprintf(file, "Doorkey[%d]inserted=%d\n", i + 1, assets->doorkeyinserted[i]);
+            fprintf(file, "Doorkey[%d]circledrawn=%d\n", i + 1, assets->doorkeycircledrawn[i]);
+        }
         fprintf(file, "Shopkeycount=%d\n", assets->shopkeycount);
         fprintf(file, "Playersuccessfulparry=%d\n", Playerdata->successfulparry);
         fprintf(file, "Playerdamagetaken=%d\n", Playerdata->damagetaken);
@@ -2311,7 +2302,7 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
 void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera) {
     FILE *file = fopen("savegame.txt", "r");
     char line[100];
-    int enemyIndex, valueInt, potionnum;
+    int enemyIndex, valueInt, potionnum, doorkeynum;
     float valueFloat;
     if (!file){
         printf("Error: No save file found. Starting a new game.\n");
@@ -2359,15 +2350,15 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "MusicVolume=%f", musicVolume);
         }else if (strstr(line, "EnemyCount=")){
             sscanf(line, "EnemyCount=%d", enemycount);
-        }else if (sscanf(line, "Enemy%dPositionX=%f", &enemyIndex, &valueFloat) == 2 && enemyIndex < MAX_ENEMIES){
+        }else if (sscanf(line, "Enemy[%d]PositionX=%f", &enemyIndex, &valueFloat) == 2 && enemyIndex < MAX_ENEMIES){
             enemies[enemyIndex].Position.x = valueFloat;
-        }else if (sscanf(line, "Enemy%dPositionY=%f", &enemyIndex, &valueFloat) == 2 && enemyIndex < MAX_ENEMIES){
+        }else if (sscanf(line, "Enemy[%d]PositionY=%f", &enemyIndex, &valueFloat) == 2 && enemyIndex < MAX_ENEMIES){
             enemies[enemyIndex].Position.y = valueFloat;
-        }else if (sscanf(line, "Enemy%dHealth=%d", &enemyIndex, &valueInt) == 2 && enemyIndex < MAX_ENEMIES){
+        }else if (sscanf(line, "Enemy[%d]Health=%d", &enemyIndex, &valueInt) == 2 && enemyIndex < MAX_ENEMIES){
             enemies[enemyIndex].hitpoints = valueInt;
-        }else if (sscanf(line, "Enemy%dDead=%d", &enemyIndex, &valueInt) == 2 && enemyIndex < MAX_ENEMIES){
+        }else if (sscanf(line, "Enemy[%d]Dead=%d", &enemyIndex, &valueInt) == 2 && enemyIndex < MAX_ENEMIES){
             enemies[enemyIndex].dead = valueInt;
-        }else if(sscanf(line, "Enemy%disremoved=%d", &enemyIndex, &valueInt) == 2 && enemyIndex < MAX_ENEMIES){
+        }else if(sscanf(line, "Enemy[%d]isremoved=%d", &enemyIndex, &valueInt) == 2 && enemyIndex < MAX_ENEMIES){
             enemies[enemyIndex].deadenemyremoved = valueInt;
         }else if (strstr(line, "CameraTargetX=")){
             sscanf(line, "CameraTargetX=%f", &camera->target.x);
@@ -2379,16 +2370,16 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
 
         for (int i = 0; i < 4; i++) {
             char potionPriceKey[30], potionBoughtKey[30], potionLeftKey[30];
-            sprintf(potionPriceKey, "Potion %d price:", i + 1);
-            sprintf(potionBoughtKey, "Potion %d bought:", i + 1);
-            sprintf(potionLeftKey, "Potion %d remaining:", i + 1);
+            sprintf(potionPriceKey, "Potion[%d]price:", i + 1);
+            sprintf(potionBoughtKey, "Potion[%d]bought:", i + 1);
+            sprintf(potionLeftKey, "Potion[%d]remaining:", i + 1);
 
             if (strstr(line, potionPriceKey)){
-                sscanf(line, "Potion %d price: %d", &i, &assets->potionprice[i]);
+                sscanf(line, "Potion[%d]price: %d", &i, &assets->potionprice[i]);
             } else if (strstr(line, potionBoughtKey)){
-                sscanf(line, "Potion %d bought: %d", &i, &Playerdata->potionbought[i]);
+                sscanf(line, "Potion[%d]bought: %d", &i, &Playerdata->potionbought[i]);
             } else if (strstr(line, potionLeftKey)){
-                sscanf(line, "Potion %d remaining: %d", &i, &assets->potionleftinshop[i]);
+                sscanf(line, "Potion[%d]remaining: %d", &i, &assets->potionleftinshop[i]);
             }
         }
         if (strstr(line, "Potionused=")){
@@ -2432,6 +2423,12 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "Potionactivetype=%d", &Playerdata->activepotiontype);
         }else if (strstr(line, "Numberofkeys=")){
             sscanf(line, "Numberofkeys=%d", &Playerdata->keycount);
+        }else if (strstr(line, "Doorkeyinserted=")){
+            sscanf(line, "Doorkeyinserted=%d", &assets->doorkeyinsertedcount);
+        }else if (sscanf(line, "Doorkey[%d]inserted=%d", &doorkeynum, &valueInt) == 2 && doorkeynum <= 4){
+            assets->doorkeyinserted[doorkeynum - 1] = valueInt;
+        }else if (sscanf(line, "Doorkey[%d]circledrawn=%d", &doorkeynum, &valueInt) == 2 && doorkeynum <= 4){
+            assets->doorkeycircledrawn[doorkeynum - 1] = valueInt;
         }else if(strstr(line, "Shopkeycount=")){
             sscanf(line, "Shopkeycount=%d", &assets->shopkeycount);
         }else if(strstr(line, "Playersuccessfulparry=")){
@@ -2441,10 +2438,7 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
         }
     }
     fclose(file);
-    printf("Game data loaded successfully.\n");
-
-
-    
+    printf("Game data loaded successfully.\n");    
 }
 
 void gameoverOverview(struct Playerinfo* Playerdata, struct GameAssets* assets, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], char action){
@@ -2692,7 +2686,108 @@ void randomenemypos(int* maxplatform, int enemyonblock[MAX_ENEMIES]){
     }
 }
 
+void lockeddoor(struct GameAssets* assets, struct Playerinfo* player){
+    Vector2 mousepos = GetMousePosition();
+    Rectangle lockeddoorsrc = {0, 40, 332, 332};
+    Rectangle lockeddoordest = {2500, windheight-240-(128*0.7), 240, 240};
+    Vector2 origin = {0, 0};
 
+    static bool notenoughkeywarning = false;
+    static bool keybeinginsertedwarning = false;
+    static float timelapsed = 0.0f;
+    bool keybeinginserted = false;
+    float dt = GetFrameTime();
+
+    if (notenoughkeywarning){
+        timelapsed += dt;
+        aligntextcentre(lockeddoordest.x + 400, lockeddoordest.y + 30, 40, "Not enough keys!", GREEN);
+        if (timelapsed > 3.0f){
+            notenoughkeywarning = false;
+        }
+    }
+
+    if (assets->doorkeyinserted[assets->doorkeyinsertedcount - 1] && assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1] < 3){
+        player->timelapsed += dt;
+        keybeinginserted = true;
+        if (player->timelapsed > 1.0f){
+            player->timelapsed = 0.0f;
+            assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1]++;
+        }
+    }else if (assets->doorkeyinserted[assets->doorkeyinsertedcount - 1] && assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1] >= 3){
+        keybeinginserted = false;
+        player->timelapsed = 0.0f;
+    }else{
+        player->timelapsed = 0.0f;
+    }
+
+    if (assets->doorkeyinserted[3] && assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1] >= 3){
+        player->won = true;
+    }
+
+    if (player->Position.x + player->width - 10 >= lockeddoordest.x && player->Position.x <= lockeddoordest.x + lockeddoordest.width
+        && player->Position.y >= lockeddoordest.y && player->Position.y <= lockeddoordest.y + lockeddoordest.height){
+            lockeddoorsrc.y += 668;
+            if (!player->won){
+                DrawRectangleRec((Rectangle){lockeddoordest.x - 70, lockeddoordest.y - 120, lockeddoordest.width + 150, 80}, (Color){255, 255, 255, 100});
+                aligntextcentre(lockeddoordest.x + lockeddoordest.width/2 + 5, lockeddoordest.y - 80, 25, "Press E to Insert Key", ORANGE);
+            }else{
+                DrawRectangleRec((Rectangle){lockeddoordest.x - 70, lockeddoordest.y - 140, lockeddoordest.width + 150, 100}, (Color){255, 255, 255, 100});
+                aligntextcentre(lockeddoordest.x + lockeddoordest.width/2 + 5, lockeddoordest.y - 120, 25, "You have unlocked the door!", ORANGE);
+                aligntextcentre(lockeddoordest.x + lockeddoordest.width/2 + 5, lockeddoordest.y - 85, 25, "Feel free to continue explore", ORANGE);
+                aligntextcentre(lockeddoordest.x + lockeddoordest.width/2 + 5, lockeddoordest.y - 50, 25, "or enter when you are ready!", ORANGE);
+            }
+        if (IsKeyPressed(KEY_E)){
+            if (!keybeinginserted && !player->won){
+                if (player->keycount > 0){
+                    assets->doorkeyinserted[assets->doorkeyinsertedcount++] = true;
+                    player->keycount--;
+                }else if (player->keycount <= 0 && !notenoughkeywarning){
+                    notenoughkeywarning = true;
+                }
+            }
+        }
+    }
+
+    DrawTexturePro(assets->texture[41], lockeddoorsrc, lockeddoordest, origin, 0, WHITE);
+
+    for (int i = 0; i < 4; i++){
+        switch (i){
+            case 0:
+                if (assets->doorkeyinserted[i]){
+                    for (int j = 0; j<assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1]; j++){
+                        DrawCircle(lockeddoordest.x + 61 + (22*j), 579, 7, BLUE);
+                    }
+                }
+                break;
+            
+            case 1:
+                if (assets->doorkeyinserted[i]){
+                    for (int j = 0; j<assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1]; j++){
+                        DrawCircle(lockeddoordest.x + lockeddoordest.width - 60 - (22*j), 579, 7, BLUE);
+                    }
+                }
+                break;
+
+            case 2:
+                if (assets->doorkeyinserted[i]){
+                    for (int j = 0; j<assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1]; j++){
+                        DrawCircle(lockeddoordest.x + 61 + (22*j), 651, 7, BLUE);
+                    }
+                }
+                break;
+
+            case 3:
+                if (assets->doorkeyinserted[i]){
+                    for (int j = 0; j<assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1]; j++){
+                        DrawCircle(lockeddoordest.x + lockeddoordest.width - 60 - (22*j), 651, 7, BLUE);
+                    }
+                }
+                break;
+        }
+    }
+
+    printf("%.2f, %.2f\n", mousepos.x, mousepos.y);
+}
 
 void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets, bool coinenemy, bool enemywithkey, struct Playerinfo* player){ 
     int framecount = 0;
@@ -3188,11 +3283,12 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("Images/Chests.png");
     assets.images[assets.imagecount++] = LoadImage("Images/Chestsbordered.png"); //39
     assets.images[assets.imagecount++] = LoadImage("Images/Dying_KG_1.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/door.png");
 
     //assets.images[assets.imagecount++] = LoadImage("Landing_KG_2.gif");
 
-    assets.music[assets.musiccount++] = LoadMusicStream("Music/13 Always With Me_ Spirited Away (Pi.mp3");
-    assets.music[assets.musiccount++] = LoadMusicStream("Music/homemusic.mp3");
+    assets.music[assets.musiccount++] = LoadMusicStream("Music/playing_music.mp3");
+    assets.music[assets.musiccount++] = LoadMusicStream("Music/menu_music.mp3");
     assets.music[assets.musiccount++] = LoadMusicStream("Music/shop_music.mp3"); //2
     assets.music[assets.musiccount++] = LoadMusicStream("Music/gameover_music.mp3");
 
@@ -3246,6 +3342,7 @@ int main()
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[38]);
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[39]); //39
     assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[40]);
+    assets.texture[assets.texturecount++] = LoadTextureFromImage(assets.images[41]);
 }
     
     struct Playerinfo Playerdata = {0};

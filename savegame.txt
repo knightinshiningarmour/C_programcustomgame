@@ -1,53 +1,53 @@
-PlayerPositionX=550.00
-PlayerPositionY=700.00
+PlayerPositionX=2565.15
+PlayerPositionY=610.40
 Playeranimationstate=0
 PlayerIsJumping=0
 PlayerIsFalling=0
 PlayerVelocityY=0.00
-PlayerOnGround=0
+PlayerOnGround=1
 PlayerOnPlatform=0
 PlayerHealth=100
 PlayerMaxHealth=100
 Playerdead=0
-Playeralivetimer=0.00
+Playeralivetimer=3.30
 Playerdeadtimer=0.00
 Playerattackdamage=0
 Playerdefense=5
 Playerjumpheight=0
 PlayerCurrency=2000
-Playeraccumulatedcurrency=0
+Playeraccumulatedcurrency=76
 MusicVolume=0.50
 EnemyCount=3
-Enemy0PositionX=400.00
-Enemy0PositionY=700.00
-Enemy0Health=75
-Enemy0Dead=0
-Enemy0isremoved=0
-Enemy1PositionX=1100.00
-Enemy1PositionY=0.00
-Enemy1Health=75
-Enemy1Dead=0
-Enemy1isremoved=0
-Enemy2PositionX=1800.00
-Enemy2PositionY=-700.00
-Enemy2Health=75
-Enemy2Dead=0
-Enemy2isremoved=0
-CameraTargetX=-1279.65
-CameraTargetY=0.00
+Enemy[0]PositionX=428.69
+Enemy[0]PositionY=562.40
+Enemy[0]Health=75
+Enemy[0]Dead=0
+Enemy[0]isremoved=0
+Enemy[1]PositionX=959.37
+Enemy[1]PositionY=562.40
+Enemy[1]Health=75
+Enemy[1]Dead=0
+Enemy[1]isremoved=0
+Enemy[2]PositionX=1058.99
+Enemy[2]PositionY=562.40
+Enemy[2]Health=75
+Enemy[2]Dead=0
+Enemy[2]isremoved=0
+CameraTargetX=2615.15
+CameraTargetY=400.00
 CameraZoom=1.00
-Potion 1 price: 150
-Potion 1 bought: 0
-Potion 1 remaining: 5
-Potion 2 price: 80
-Potion 2 bought: 0
-Potion 2 remaining: 5
-Potion 3 price: 100
-Potion 3 bought: 0
-Potion 3 remaining: 5
-Potion 4 price: 100
-Potion 4 bought: 0
-Potion 4 remaining: 5
+Potion[1]price: 150
+Potion[1]bought: 0
+Potion[1]remaining: 5
+Potion[2]price: 80
+Potion[2]bought: 0
+Potion[2]remaining: 5
+Potion[3]price: 100
+Potion[3]bought: 0
+Potion[3]remaining: 5
+Potion[4]price: 100
+Potion[4]bought: 0
+Potion[4]remaining: 5
 Potionused=0
 Playerinvenrow2[0]=0
 Playerinvenrow2[1]=0
@@ -64,6 +64,15 @@ PotionCount=0
 Potioneffecttimer=0.00
 Potionactivetype=-1
 Numberofkeys=0
+Doorkeyinserted=4
+Doorkey[1]inserted=1
+Doorkey[1]circledrawn=3
+Doorkey[2]inserted=1
+Doorkey[2]circledrawn=3
+Doorkey[3]inserted=1
+Doorkey[3]circledrawn=3
+Doorkey[4]inserted=1
+Doorkey[4]circledrawn=3
 Shopkeycount=1
 Playersuccessfulparry=0
 Playerdamagetaken=0

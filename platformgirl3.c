@@ -2555,6 +2555,7 @@ int loadmap(const char* filename, struct GameAssets* assets){
             } else if (line[col] == '2') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockheight, blockwidth, blockheight};
                 blocksarray[i].chestrec = true;
+                blocksarray[i].key = false;
                 blocksarray[i].cheststate = 0;
                 blocksarray[i].chestanimationframe = 0;
                 blocksarray[i].chestanimationtimer = 0.0f;
@@ -2624,18 +2625,9 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
                 }
             }
 
-
             int frameindex = blocksarray[i].chestanimationframe % 5;
             int rowindex = blocksarray[i].chestanimationframe / 5; 
-
-            Rectangle chestsrc = {
-                frameindex * (assets->texture[38].width / 5), 
-                rowindex * (assets->texture[38].height / 8),  
-                assets->texture[38].width / 5,               
-                assets->texture[38].height / 8             
-            };
-
-            // Draw the chest
+            Rectangle chestsrc = {frameindex * (assets->texture[38].width / 5), rowindex * (assets->texture[38].height / 8), assets->texture[38].width / 5, assets->texture[38].height / 8 };
             DrawTexturePro(chesttexture, chestsrc, chestdest, origin, 0, WHITE);
         }
     }

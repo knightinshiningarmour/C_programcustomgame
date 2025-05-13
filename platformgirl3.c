@@ -95,6 +95,8 @@ struct Playerinfo
     bool enemywithkey[MAX_ENEMIES];
     bool deadenemyremoved;
     bool chestrec;
+    bool key;
+    bool keyclaimed;
     int cheststate;
     int chestanimationframe;
     float chestanimationtimer;
@@ -216,7 +218,7 @@ void drawInventory2n3row(struct GameAssets* assets, struct Playerinfo* player, R
 void addItemToInventory(struct Playerinfo* player, ItemType itemType);
 void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, struct Playerinfo enemies[MAX_ENEMIES], int* enemycount);
 void gameoverOverview(struct Playerinfo* Playerdata, struct GameAssets* assets, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], char action);
-void lockeddoor(struct GameAssets* assets, struct Playerinfo* player);
+void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState);
 
 void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
                         int* playerlastframedirection, int* playercurrentframe, int enemyonblock[MAX_ENEMIES], 
@@ -289,10 +291,10 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->alivetimercompare = 0.0f;
     Playerdata->successfulparry = 0;
     Playerdata->damagetaken = 0;
-    Playerdata->keycount = 4;
+    Playerdata->keycount = 0;
     Playerdata->timelapsed = 0.0f;
     assets->doorkeyinsertedcount = 0;
-    assets->shopkeycount = 1;
+    assets->shopkeycount = 2;
     assets->shopkeyprice = 500;
 
     Playerdata->jumpboost = -700.0f; //jump
@@ -722,7 +724,7 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
     playerenemyhpbar(Playerdata, enemies, assets, *enemycount, camera);
     drawobstacles(*blockcount, assets, Playerdata);
     shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
-    lockeddoor(assets, Playerdata);
+    lockeddoor(assets, Playerdata, currentGameState);
     *playerlastframedirection = calculatemovementplayer(Playerdata, blockcount, assets, *currentGameState);
     updatecamera(camera, Playerdata);
     keepobjectwithinscreen(Playerdata, assets);
@@ -1080,7 +1082,6 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
         
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
             if (player->currency >= assets->shopkeyprice){
-                player->keycount++;
                 addItemToInventory(player, 1);
                 player->currency -= assets->shopkeyprice;
                 assets->shopkeycount--;
@@ -1283,6 +1284,8 @@ void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, G
     Rectangle homebuttondest = {50, 50, 100, 100};
     Rectangle playerdeadsrc = {assets->src_dyingx[4], assets->src_dyingy[4], assets->src_dyingwidth[4], assets->texture[40].height - assets->src_dyingy[4]};
     Rectangle playerdeaddest = {windwidth/2 - 500, windheight - (128 * 0.8) - 80, playerdeadsrc.width * 3.5, 80};
+    Rectangle playeridlesrc = {assets->src_idlex[3], assets->src_idley[3], 50, 61};
+    Rectangle playeridledest = {windwidth/2 - 500, windheight - (128*0.8) - 180, 140, 180};
     Vector2 mousePos = GetMousePosition();
 
     float dt = GetFrameTime();
@@ -1298,7 +1301,7 @@ void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, G
         gameoverOverview(player, assets, *enemycount, enemies, 'r');
         gameoverviewloaded = true;
     }
-    if (*currentmusic != 3) { 
+    if (*currentmusic != 3 && !player->won) { 
         *currentmusic = 3;
         StopMusicStream(assets->music[*currentmusic]);
         PlayMusicStream(assets->music[3]);
@@ -1327,9 +1330,16 @@ void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, G
 
     drawtrees(assets, 3, 200, windheight-(128*0.8)-(100 * 5) + 2, 5);
     drawtrees(assets, 6, 500, windheight-(128*0.8) + 2, 6);
-    aligntextcentre(500+(27 * 6)/2, windheight - (128 * 0.8) - (28 * 6) + 40, 22, "In Memories", BEIGE);
     DrawTexturePro(assets->texture[31], homebuttonsrc, homebuttondest, (Vector2){0,0}, 0, WHITE);
-    DrawTexturePro(assets->texture[40], playerdeadsrc, playerdeaddest, (Vector2){0, 0}, 0.0f, (Color){213, 213, 213, 255});
+    
+    if (player->won){
+        DrawTexturePro(assets->texture[1], playeridlesrc, playeridledest, (Vector2){0, 0}, 0.0f, WHITE);
+        aligntextcentre(500+(27 * 6)/2, windheight - (128 * 0.8) - (28 * 6) + 40, 22, "Victorious", BEIGE);
+    }else{
+        DrawTexturePro(assets->texture[40], playerdeadsrc, playerdeaddest, (Vector2){0, 0}, 0.0f, (Color){213, 213, 213, 255});
+        aligntextcentre(500+(27 * 6)/2, windheight - (128 * 0.8) - (28 * 6) + 40, 22, "In Memories", BEIGE);
+    }
+
     for (int i = 0; i<3; i++){
         drawtrees(assets, 1, 500 + (60*i), windheight-(128*0.8) + 2, 4);
         drawtrees(assets, 4, 1000 + (60*i), windheight-(128*0.8) + 2, 4);
@@ -1351,40 +1361,50 @@ void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, G
         case 1:
             if (player->accumulatedcurrency >= 2000){
                 sprintf(text, "You have accumulated a total of %d coins.\n\n\nYou are truly a one-of-a-kind money collector.\n\n\nPress -> or <- to continue.", player->accumulatedcurrency);
-            }else{
+            }else if (player->accumulatedcurrency < 2000 && !player->won){
                 sprintf(text, "You have accumulated a total of %d coins.\n\n\nYou're truly one of a kind... at missing money.\n\n\nPress -> or <- to continue.", player->accumulatedcurrency);
+            }else if (player->accumulatedcurrency < 2000 && player->won){
+                sprintf(text, "You have accumulated a total of %d coins.\n\n\nYou're truly one of a kind... who doesn't need money.\n\n\nPress -> or <- to continue.", player->accumulatedcurrency);
             }
             break;
 
         case 2:
-            if (player->potionused >= 5){
+            if (player->potionused >= 5 && !player->won){
                 sprintf(text, "You have used a total of %d potions.\n\n\nPotion count: embarrassing. Were you bathing in them?\n\n\nPress -> or <- to continue.", player->potionused);
-            }else{
+            }else if (player->potionused >= 5 && player->won){
+                sprintf(text, "You have used a total of %d potions.\n\n\nPotion count: impressive. You are a true alchemist.\n\n\nPress -> or <- to continue.", player->potionused);
+            }else if (player->potionused < 5){
                 sprintf(text, "You have used a total of %d potions.\n\n\nMinimal potion use? You're built different.\n\n\nPress -> or <- to continue.", player->potionused);
             }
             break;
 
         case 3:
-            if (player->enemykilled >= MAX_ENEMIES - 2){
+            if (player->enemykilled >= MAX_ENEMIES - 1){
                 sprintf(text, "Your kill count in this run: %d.\n\n\nSlayer stats unlocked: that kill count speaks for itself.\n\n\nPress -> or <- to continue.", player->enemykilled);
-            }else{
+            }else if (player->enemykilled < MAX_ENEMIES - 1 && !player->won){
                 sprintf(text, "Your kill count in this run: %d.\n\n\nEnemies killed: barely. Did you miss them on purpose?\n\n\nPress -> or <- to continue.", player->enemykilled);
+            }else if (player->enemykilled < MAX_ENEMIES - 1 && player->won){
+                sprintf(text, "Your kill count in this run: %d.\n\n\nEnemies killed: not bad. You got your priorities right.\n\n\nPress -> or <- to continue.", player->enemykilled);
             }
             break;
 
         case 4:
             if (player->damagetaken >= 300){
                 sprintf(text, "Damage taken: %d. The more you took, the stronger you became.\n\n\n You took everything like a boss.\n\n\nPress -> or <- to continue.", player->damagetaken);
-            }else{
+            }else if (player->damagetaken < 300 && !player->won){
                 sprintf(text, "Damage taken: %d. You barely took any damage but still die.\n\n\nAre you playing without a shield?\n\n\nPress -> or <- to continue.", player->damagetaken);
+            }else if (player->damagetaken < 300 && player->won){
+                sprintf(text, "Damage taken: %d. You barely took any damage and won.\n\n\nYou are a true ninja.\n\n\nPress -> or <- to continue.", player->damagetaken);
             }
             break;
 
         case 5:
             if (player->successfulparry >= 10){
                 sprintf(text, "Successful parry this run: %d. Perfect!\n\n\nYou read their move and countered like a master.\n\n\nPress -> or <- to continue.", player->successfulparry);
-            }else{
+            }else if (player->successfulparry < 10 && !player->won){
                 sprintf(text, "Successful parry this run: %d.\n\n\nMissed that parry by a mile? Better luck next time!\n\n\nPress -> or <- to continue.", player->successfulparry);
+            }else if (player->successfulparry < 10 && player->won){
+                sprintf(text, "Successful parry this run: %d.\n\n\nYou don't need parry, parry needs you.\n\n\nPress -> or <- to continue.", player->successfulparry);
             }
             break;
     }
@@ -1536,8 +1556,14 @@ void shop(struct GameAssets* assets, struct Playerinfo* player, int* currentGame
 void addItemToInventory(struct Playerinfo* player, ItemType itemType){
     for (int row = 0; row < 2; row++) {
         for (int col = 0; col < 4; col++) {
-            if (player->inventoryrow2n3available[row][col] == itemType) {
-                if (itemType == KEY) {
+            if (player->inventoryrow2n3available[row][col] == 0) {
+                player->inventoryrow2n3available[row][col] = itemType;
+                if (itemType == KEY){
+                    player->keycount++;
+                }
+                return;
+            }else if (player->inventoryrow2n3available[row][col] == itemType) {
+                if (itemType == KEY){
                     player->keycount++;
                 } 
                 return;
@@ -2535,7 +2561,12 @@ int loadmap(const char* filename, struct GameAssets* assets){
                 i++;
             } else if (line[col] == '3') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockheight, blockwidth, blockheight};
-                blocksarray[i].colour = RED; 
+                blocksarray[i].chestrec = true;
+                blocksarray[i].key = true;
+                blocksarray[i].keyclaimed = false;
+                blocksarray[i].cheststate = 0;
+                blocksarray[i].chestanimationframe = 0;
+                blocksarray[i].chestanimationtimer = 0.0f;
                 i++;
             }
         }
@@ -2561,7 +2592,7 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
             if (player->Position.x + player->width > blocksarray[i].rect.x &&
                 player->Position.x < blocksarray[i].rect.x + blocksarray[i].rect.width &&
                 player->Position.y + player->height > blocksarray[i].rect.y - 50 &&
-                player->Position.y < blocksarray[i].rect.y + blocksarray[i].rect.height) {
+                player->Position.y < blocksarray[i].rect.y + blocksarray[i].rect.height && blocksarray[i].cheststate != 2) {
                 DrawRectangleRounded((Rectangle){chestdest.x - 40, chestdest.y - 30, chestdest.width + 70, 40}, 20, 0, (Color){255, 255, 255, 100});
                 aligntextcentre(chestdest.x + chestdest.width / 2, chestdest.y - 10, 30, "Press E to Open", WHITE);
 
@@ -2583,6 +2614,13 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
                         blocksarray[i].cheststate = 2; 
                         blocksarray[i].chestanimationframe = 9;
                     }
+                }
+            }
+
+            if (blocksarray[i].cheststate == 2) {
+                if (blocksarray[i].key && !blocksarray[i].keyclaimed) {
+                    addItemToInventory(player, 1);
+                    blocksarray[i].keyclaimed = true;
                 }
             }
 
@@ -2686,7 +2724,7 @@ void randomenemypos(int* maxplatform, int enemyonblock[MAX_ENEMIES]){
     }
 }
 
-void lockeddoor(struct GameAssets* assets, struct Playerinfo* player){
+void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState){
     Vector2 mousepos = GetMousePosition();
     Rectangle lockeddoorsrc = {0, 40, 332, 332};
     Rectangle lockeddoordest = {2500, windheight-240-(128*0.7), 240, 240};
@@ -2744,6 +2782,8 @@ void lockeddoor(struct GameAssets* assets, struct Playerinfo* player){
                 }else if (player->keycount <= 0 && !notenoughkeywarning){
                     notenoughkeywarning = true;
                 }
+            }else if (player->won){
+                *currentGameState = GAMEOVER;
             }
         }
     }
@@ -2785,7 +2825,6 @@ void lockeddoor(struct GameAssets* assets, struct Playerinfo* player){
                 break;
         }
     }
-
     printf("%.2f, %.2f\n", mousepos.x, mousepos.y);
 }
 

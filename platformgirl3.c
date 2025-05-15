@@ -14,7 +14,7 @@
 const int windwidth = 1200;
 const int windheight = 800;
 const int mapwidth = windwidth * 3;
-const int mapheight = -windheight * 5;
+const int mapheight = -windheight;
 
 typedef enum{
     ITEM_NONE,
@@ -264,7 +264,7 @@ void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, 
 
 void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* lastframedirection){
     // Initialize player data
-    Playerdata->Position = (Vector2){500, windheight - 100};
+    Playerdata->Position = (Vector2){1000, windheight - 500};
     Playerdata->width = 50;
     Playerdata->height = 50;
     Playerdata->currenthp = 100;
@@ -1233,6 +1233,7 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
                     *currentGameState = MENU; // Return to the main menu
                     *gamedataloaded = false;
                     savetimer = 0.0f;
+                    unsavedchanges = true;
                 }else{
                     showsavechangeswarning = true; //the player has not saved the game
                     unsavedchanges = true;
@@ -1280,6 +1281,8 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
                 confirmedsave = false; //so that the prompt disappears
                 savetimer = 0.0f;
+                unsavedchanges = true;
+                showsavechangeswarning = false;
             }
         }
         else if (CheckCollisionPointRec(mousePos, backButton) || CheckCollisionPointRec(mousePos, resumeButton)){
@@ -1287,8 +1290,10 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
                 confirmedsave = false; //so that the prompt disappears
                 if (unsavedchanges){
                     showsavechangeswarning = true; //the player has not saved the game
-                    }
-                savetimer = 0.0f;
+                }else{
+                    savetimer = 0.0f;
+                    unsavedchanges = true;
+                }
             }
         }
     }
@@ -1317,8 +1322,9 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
             DrawRectangleRec(yesButtonback, LIGHTGRAY);
             aligntextcentre(yesButtonback.x + yesButtonback.width / 2, yesButtonback.y + yesButtonback.height / 2, 30, "Yes", BLACK);
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) { //player has saved the game
-                unsavedchanges = false;
+                unsavedchanges = true;
                 showsavechangeswarning = false;
+                *currentGameState = MENU;
             }
         }
         else if (CheckCollisionPointRec(mousePos, noButtonback)){
@@ -1721,35 +1727,35 @@ void updatecamera(Camera2D* camera, struct Playerinfo* player) {
 }
 
 void drawbackground (struct GameAssets* assets, Camera2D* camera, int x, float scalefactor){
-    float skySpeed = 0.1f;      
-    float mountainSpeed1 = 0.3f; 
-    float mountainSpeed2 = 0.5f; 
-
-    float skyOffset = -camera->target.x * skySpeed;
-    float mountainOffset1 = -camera->target.x * mountainSpeed1;
-    float mountainOffset2 = -camera->target.x * mountainSpeed2;
-
     switch (x){
         case 1:
-            for (int i = 0; i < (mapwidth/(assets->texture[6].width*scalefactor)); i++) {
-                Rectangle skysrc = {0, 0, assets->texture[6].width, assets->texture[6].height};
-                Rectangle skydest = {i * (skysrc.width*scalefactor), -300, (float)skysrc.width * scalefactor, (float)skysrc.height * scalefactor};  
+            Rectangle skysrc;
+            Rectangle skydest;
+            for (int i = 0; i < (mapwidth/((assets->texture[6].width+200)*scalefactor)); i++) {
+                if (i==0){
+                    skysrc = (Rectangle){0, 0, assets->texture[6].width, assets->texture[6].height};
+                    skydest = (Rectangle){i * (skysrc.width*scalefactor), -800, (float)(assets->texture[6].width+200)*scalefactor, (float)skysrc.height * scalefactor + 270};  
+                }else{
+                    skysrc = (Rectangle){0, 0, 1300, assets->texture[6].height};
+                    skydest = (Rectangle){i * (assets->texture[6].width*scalefactor), -800, (float)(assets->texture[6].width+200)*scalefactor, (float)skysrc.height * scalefactor + 270};
+                }
                 Vector2 origin = {0, 0};
                 DrawTexturePro(assets->texture[6], skysrc, skydest, origin, 0, WHITE);
+                printf("Skydest.y = %.2f\n", skydest.y);
             }
             break;
         case 2:
-            for (int i = 0; i < (mapwidth/(assets->texture[7].width*scalefactor)); i++) {
+            for (int i = 0; i < (mapwidth/((assets->texture[7].width + 500)*scalefactor)); i++) {
                 Rectangle mountainsrc = {0, 0, assets->texture[7].width, assets->texture[7].height};
-                Rectangle mountaindest = {i * mountainsrc.width*scalefactor, windheight - (128*0.7) - (mountainsrc.height*scalefactor), mountainsrc.width*scalefactor, mountainsrc.height*scalefactor}; // Adjust position and size
+                Rectangle mountaindest = {i * (mountainsrc.width+500)*scalefactor, windheight - (128*0.7) - (mountainsrc.height*scalefactor) - 300, (mountainsrc.width + 500)*scalefactor, mountainsrc.height*scalefactor + 300}; // Adjust position and size
                 Vector2 origin = {0, 0};
                 DrawTexturePro(assets->texture[7], mountainsrc, mountaindest, origin, 0, WHITE);
             }
             break;
         case 3:
-            for (int i = 0; i < (mapwidth/(assets->texture[8].width*scalefactor)); i++) {
+            for (int i = 0; i < (mapwidth/((assets->texture[8].width + 500)*scalefactor)); i++) {
                 Rectangle mountainsrc2 = {0, 0, assets->texture[8].width, assets->texture[8].height};
-                Rectangle mountaindest2 = {i * mountainsrc2.width*scalefactor, windheight - (128*0.7) - (mountainsrc2.height*scalefactor), mountainsrc2.width*scalefactor, mountainsrc2.height*scalefactor}; // Adjust position and size
+                Rectangle mountaindest2 = {i * (mountainsrc2.width+500)*scalefactor, windheight - (128*0.7) - (mountainsrc2.height*scalefactor)  - 300, (mountainsrc2.width + 500)*scalefactor, mountainsrc2.height*scalefactor + 300}; // Adjust position and size
                 Vector2 origin = {0, 0};
                 DrawTexturePro(assets->texture[8], mountainsrc2, mountaindest2, origin, 0, WHITE);
             }
@@ -2677,6 +2683,7 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
                     blocksarray[i].cheststate = 1; 
                     blocksarray[i].chestanimationframe = 0;
                     blocksarray[i].chestanimationtimer = 0.0f;
+                    SetSoundVolume(assets->sound[1], 0.6f);
                     PlaySound(assets->sound[1]);
                 }
             }

@@ -264,7 +264,7 @@ void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, 
 
 void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* lastframedirection){
     // Initialize player data
-    Playerdata->Position = (Vector2){2000, windheight - 100};
+    Playerdata->Position = (Vector2){500, windheight - 100};
     Playerdata->width = 50;
     Playerdata->height = 50;
     Playerdata->currenthp = 100;
@@ -287,8 +287,6 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->potioneffect = 0.0f;
     Playerdata->activepotiontype = -1;
     Playerdata->potionused = 0;
-    Playerdata->alivetimer = 0.0f;
-    Playerdata->alivetimercompare = 0.0f;
     Playerdata->successfulparry = 0;
     Playerdata->damagetaken = 0;
     Playerdata->keycount = 0;
@@ -528,6 +526,8 @@ void handleLoadSaves(struct GameAssets* assets, struct Playerinfo* Playerdata, G
         aligntextcentre(newGameButton.x + newGameButton.width / 2, newGameButton.y + newGameButton.height / 2, 30, "NEW GAME", BLACK);
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             initializeGameState(assets, Playerdata, currentGameState, currentmusic, musicVolume, playerlastframedirection);
+            Playerdata->alivetimer = 0.0f;
+            Playerdata->alivetimercompare = 0.0f;
             *currentGameState = PLAYING; 
             *gamedataloaded = true;
         } 
@@ -545,6 +545,8 @@ void handleLoadSaves(struct GameAssets* assets, struct Playerinfo* Playerdata, G
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             initializeGameState(assets, Playerdata, currentGameState, currentmusic, musicVolume, playerlastframedirection);
             loadgamedata(assets, Playerdata, currentGameState, currentmusic, musicVolume, enemycount, enemies, camera);
+            printf("Alive timer: %f\n", Playerdata->alivetimer);
+            printf("Playerposition: %f, %f\n", Playerdata->Position.x, Playerdata->Position.y);
             *currentGameState = PLAYING;
         }
     }else{
@@ -1008,7 +1010,7 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
     Rectangle potionspos[4]; //array to store the potions' coordinates
     Vector2 mousePos = GetMousePosition();
     Rectangle emptybuttonsrc = {0, 2, assets->texture[23].width, 27};
-    Rectangle shopbackbuttondest = {950, 50, 200, 50};
+    Rectangle shopbackbuttondest = {900, 40, 250, 80};
     Rectangle playerhpsrc = {337 - (48 * ((100 - player->currenthp)/7)), 1, 46, 14};
     Rectangle playerhpdest = {50, 50, 200, 70};
     Rectangle descriptionrecdest = {65, 325, 325, 470};
@@ -1034,12 +1036,13 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
 
     sprintf(currencytext, "Currently available money: %d", player->currency);
     DrawTexturePro(assets->texture[11], shopbgsrc, shopbgdest, shopbgorigin, 0, WHITE);
+    //DrawRectangleRec(shopbgdest, (Color){242, 255, 196, 100});
     DrawTexturePro(assets->texture[28], shopInventorysrc, shopInventorydest, shopInventoryorigin, 0, WHITE);
     DrawTexturePro(assets->texture[28], shopinvenextsrc, shopinvenextdest, (Vector2){0, 0}, 0, WHITE);
     DrawTexturePro(assets->texture[23], emptybuttonsrc, shopbackbuttondest, (Vector2){0, 0}, 0.0f, WHITE);
     DrawTexturePro(assets->texture[21], playerhpsrc, playerhpdest, (Vector2){0, 0}, 0.0f, WHITE);
-    aligntextcentre(shopbackbuttondest.x + shopbackbuttondest.width / 2, shopbackbuttondest.y + shopbackbuttondest.height / 2, 30, "Back", BLACK);   
-    aligntextcentre(360, 760, 30, currencytext, BLUE);
+    aligntextcentre(shopbackbuttondest.x + shopbackbuttondest.width / 2, shopbackbuttondest.y + shopbackbuttondest.height / 2, 50, "Back", BLACK);   
+    aligntextcentre(360, 765, 30, currencytext, BLUE);
     shopstateanimation(assets);
 
     if (*currentmusic != 2) { 
@@ -1069,7 +1072,7 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
     if (assets->shopkeycount != 0){
         sprintf(potionleft, "x%d", assets->shopkeycount);
         DrawRectangleRec((Rectangle){460, 365, 40, 30}, (Color){255, 255, 153, 120});
-        DrawText(potionleft, 470, 365, 30, BLACK);
+        DrawText(potionleft, 465, 365, 30, BLACK);
     }else{
         Vector2 soldtextpos = {keydest.x + keydest.width / 2, keydest.y + keydest.height / 2};
         DrawRectangleRec((Rectangle){439, 306, 70, 87}, (Color){180, 180, 180, 180});
@@ -1096,8 +1099,8 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
 
         if (assets->potionleftinshop[i] != 0){
             sprintf(potionlefttext, "x%d", assets->potionleftinshop[i]);
-            DrawRectangleRec((Rectangle){470 + (90*i), 260, 40, 30}, (Color){255, 255, 153, 120});
-            DrawText(potionlefttext, 470 + (90*i), 260, 30, BLACK);
+            DrawRectangleRec((Rectangle){448 + (i * potiontexturewidth/6) + 18, 260, 40, 30}, (Color){255, 255, 153, 120}); //potiondest.y + 55
+            DrawText(potionlefttext, 448 + (i * potiontexturewidth/6) + 24, 260, 30, BLACK);
         }else{
             Vector2 soldtextpos = {478 + (90 * i), 250};
             DrawRectangleRec((Rectangle){439 + (92*i), 200, 70, 87}, (Color){180, 180, 180, 180});
@@ -1107,12 +1110,10 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
         if (CheckCollisionPointRec(mousePos, potionspos[i])){
             DrawRectangleRec(potionspos[i], (Color){255, 255, 255, 80});
             DrawRectangle(65, 330, 325, 5, DARKBROWN);
-            //DrawRectangleRec((Rectangle){}, YELLOW);
             for (int j=0; j<4; j++){
                 int descIndex = i * 4 + j;
                 int lineY = 10 + descriptionrecdest.y + j * lineHeight;
                 if (descIndex % 4 == 0){
-                    //DrawRectangleRec((Rectangle){65, 270, 325, 60}, (Color){255, 255, 206, 80});
                     aligntextcentre(descriptionrecdest.x + descriptionrecdest.width/2, lineY- 35, 31, potiondesc[descIndex], potioncolor[i]);
                 }else{
                     aligntextcentre(descriptionrecdest.x + descriptionrecdest.width/2, lineY - 30, 24, potiondesc[descIndex], ORANGE);
@@ -1139,7 +1140,7 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
 
     if (CheckCollisionPointRec(GetMousePosition(), shopbackbuttondest)){
         DrawTexturePro(assets->texture[26], (Rectangle){0, 4, assets->texture[26].width, 25}, shopbackbuttondest, (Vector2){0, 0}, 0.0f, WHITE);
-        aligntextcentre(shopbackbuttondest.x + shopbackbuttondest.width / 2, shopbackbuttondest.y + shopbackbuttondest.height / 2, 30, "Back", BLACK);
+        aligntextcentre(shopbackbuttondest.x + shopbackbuttondest.width / 2, shopbackbuttondest.y + shopbackbuttondest.height / 2, 50, "Back", BLACK);
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             *currentGameState = PLAYING;
         }
@@ -1166,6 +1167,8 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
     const char* text[] = {"RESUME", "SAVE GAME", "BACK TO MENU"};
     static float savetimer = 0.0f;
     static bool confirmedsave = false;
+    static bool unsavedchanges = true;
+    static bool showsavechangeswarning = false;
     static bool hoverdrawn = false;
     bool ishovered = false;
 
@@ -1207,10 +1210,12 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
     if (CheckCollisionPointRec(mousePos, resumeButton)){
         DrawTexturePro(assets->texture[26], hoveredbuttonsrc, resumeButton, (Vector2){0, 0}, 0.0f, WHITE);
         aligntextcentre(resumeButton.x + resumeButton.width / 2, resumeButton.y + resumeButton.height / 2, 30, text[0], BLACK);
-        ishovered = true;
+        ishovered = true; //boolean to check if the mouse is hovering over the button
         if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             *currentGameState = PLAYING; // Resume the game
             savetimer = 0.0f;
+            unsavedchanges = true;
+            showsavechangeswarning = false;
         }
     }else if (CheckCollisionPointRec(mousePos, saveButton)){
         DrawTexturePro(assets->texture[26], hoveredbuttonsrc, saveButton, (Vector2){0, 0}, 0.0f, WHITE);
@@ -1220,13 +1225,19 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
             confirmedsave = true;
         }
     }else if (CheckCollisionPointRec(mousePos, backButton)){
-        DrawTexturePro(assets->texture[26], hoveredbuttonsrc, backButton, (Vector2){0, 0}, 0.0f, WHITE);
-        aligntextcentre(backButton.x + backButton.width / 2, backButton.y + backButton.height / 2, 30, text[2], BLACK);
-        ishovered = true;
-        if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            *currentGameState = MENU; // Return to the main menu
-            *gamedataloaded = false;
-        }
+            DrawTexturePro(assets->texture[26], hoveredbuttonsrc, backButton, (Vector2){0, 0}, 0.0f, WHITE);
+            aligntextcentre(backButton.x + backButton.width / 2, backButton.y + backButton.height / 2, 30, text[2], BLACK);
+            ishovered = true;
+            if(IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                if (!unsavedchanges){ //if the user has already saved the game
+                    *currentGameState = MENU; // Return to the main menu
+                    *gamedataloaded = false;
+                    savetimer = 0.0f;
+                }else{
+                    showsavechangeswarning = true; //the player has not saved the game
+                    unsavedchanges = true;
+                }
+            }
     }else{
         ishovered = false;
     }
@@ -1236,6 +1247,9 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
     if(!ishovered){ 
         hoverdrawn = false;}
     if (confirmedsave) {
+        if (showsavechangeswarning){
+            showsavechangeswarning = false;
+        }
         DrawTexturePro(assets->texture[23], (Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},(Rectangle){280, saveButton.y - 10, 640, saveButton.height+10}, (Vector2){0, 0}, 0.0f, WHITE);
         aligntextcentre(605, saveButton.y - 10 + saveButton.height / 2, 20, "Confirm Save? The previous data will be overwritten.", BLACK);
         
@@ -1252,9 +1266,11 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
         if (CheckCollisionPointRec(mousePos, yesButton)){
             DrawRectangleRec(yesButton, LIGHTGRAY);
             aligntextcentre(yesButton.x + yesButton.width / 2, yesButton.y + yesButton.height / 2, 30, "Yes", BLACK);
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) { //player has saved the game
                 confirmedsave = false;
                 savegamedata(Playerdata, assets, currentGameState, currentmusic, *musicVolume, *enemycount, enemies, camera);
+                unsavedchanges = false;
+                showsavechangeswarning = false;
                 savetimer = 3.0f;
             }
         }
@@ -1262,13 +1278,16 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
             DrawRectangleRec(noButton, LIGHTGRAY);
             aligntextcentre(noButton.x + noButton.width / 2, noButton.y + noButton.height / 2, 30, "No", BLACK);
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
-                confirmedsave = false;
+                confirmedsave = false; //so that the prompt disappears
                 savetimer = 0.0f;
             }
         }
         else if (CheckCollisionPointRec(mousePos, backButton) || CheckCollisionPointRec(mousePos, resumeButton)){
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
-                confirmedsave = false;
+                confirmedsave = false; //so that the prompt disappears
+                if (unsavedchanges){
+                    showsavechangeswarning = true; //the player has not saved the game
+                    }
                 savetimer = 0.0f;
             }
         }
@@ -1276,6 +1295,40 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
     if (savetimer > 0.0f) {
         aligntextcentre(200 + pausebgdest.width/2, 700, 50, "Game Saved!", GREEN); 
         savetimer -= GetFrameTime();
+    }
+
+    if (showsavechangeswarning){
+        if (confirmedsave){
+            confirmedsave = false;
+        }
+        Rectangle yesButtonback = {310, backButton.y + 90, 280, 40};
+        Rectangle noButtonback = {590, backButton.y + 90, 280, 40};
+        DrawTexturePro(assets->texture[23], (Rectangle){0, 0, assets->texture[23].width, assets->texture[23].height},(Rectangle){280, backButton.y - 10, 640, backButton.height+10}, (Vector2){0, 0}, 0.0f, WHITE);
+        aligntextcentre(605, backButton.y - 10 + backButton.height / 2, 20, "Unsaved changes! Are you sure you want to quit?", BLACK);
+        
+        DrawRectangleRec(yesButtonback, BEIGE);
+        DrawRectangleRec(noButtonback, BEIGE);
+        DrawRectangleLines(yesButtonback.x, yesButtonback.y, yesButtonback.width, yesButtonback.height, BLACK);
+        DrawRectangleLines(noButtonback.x, noButtonback.y, noButtonback.width, noButtonback.height, BLACK);
+        aligntextcentre(yesButtonback.x + yesButtonback.width / 2, yesButtonback.y + yesButtonback.height / 2, 30, "Yes", WHITE);
+        aligntextcentre(noButtonback.x + noButtonback.width / 2, noButtonback.y + noButtonback.height / 2, 30, "No", WHITE);
+
+        if (CheckCollisionPointRec(mousePos, yesButtonback)){
+            DrawRectangleRec(yesButtonback, LIGHTGRAY);
+            aligntextcentre(yesButtonback.x + yesButtonback.width / 2, yesButtonback.y + yesButtonback.height / 2, 30, "Yes", BLACK);
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) { //player has saved the game
+                unsavedchanges = false;
+                showsavechangeswarning = false;
+            }
+        }
+        else if (CheckCollisionPointRec(mousePos, noButtonback)){
+            DrawRectangleRec(noButtonback, LIGHTGRAY);
+            aligntextcentre(noButtonback.x + noButtonback.width / 2, noButtonback.y + noButtonback.height / 2, 30, "No", BLACK);
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
+                unsavedchanges = true; //so that the prompt disappears
+                showsavechangeswarning = false;
+            }
+        }
     }
 }
 
@@ -2270,8 +2323,8 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
         fprintf(file, "PlayerHealth=%d\n", Playerdata->currenthp);
         fprintf(file, "PlayerMaxHealth=%d\n", Playerdata->hitpoints);
         fprintf(file, "Playerdead=%d\n", Playerdata->dead);
-        fprintf(file, "Playeralivetimer=%.2f\n", Playerdata->alivetimer);
         fprintf(file, "Playerdeadtimer=%.2f\n", Playerdata->deadtimer);
+        fprintf(file, "Playeralivetimer=%.2f\n", Playerdata->alivetimer);
         fprintf(file, "Playerattackdamage=%d\n", Playerdata->playerdamage);
         fprintf(file, "Playerdefense=%d\n", Playerdata->playerdefense);
         fprintf(file, "Playerjumpheight=%d\n", Playerdata->jumpboost);
@@ -2358,10 +2411,10 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             sscanf(line, "PlayerMaxHealth=%d", &Playerdata->hitpoints);
         }else if (strstr(line, "Playerdead=")){
             sscanf(line, "Playerdead=%d", &Playerdata->dead);
-        }else if (strstr(line, "Playeralivetimer=")){
-            sscanf(line, "Playeralivetimer=%.2f", &Playerdata->alivetimer);
         }else if (strstr(line, "Playerdeadtimer=")){
             sscanf(line, "Playerdeadtimer=%d", &Playerdata->deadtimer);
+        }else if (strstr(line, "Playeralivetimer=")){
+            sscanf(line, "Playeralivetimer=%.2f", &Playerdata->alivetimer);
         }else if (strstr(line, "Playerattackdamage=")){
             sscanf(line, "Playerattackdamage=%d", &Playerdata->playerdamage);
         }else if (strstr(line, "Playerdefense=")){
@@ -2579,13 +2632,36 @@ int loadmap(const char* filename, struct GameAssets* assets){
 
 void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo* player) {
     Rectangle sourceRect = {240, 48, 63, 30};
+    Rectangle keysrc = {0, 0, assets->texture[36].width, assets->texture[36].height};
+    Rectangle keydest = {0, 0, 65, 45};
     Vector2 origin = {0, 0};
     Texture2D chesttexture;
+    static float keyRiseTime = 0.0f;
+    static bool keyshdrise = false;
+    static Vector2 chestlocation = {0, 0};
+
+    if (keyshdrise && keyRiseTime < 4.0f) {
+        keyRiseTime += GetFrameTime();
+        if (keyRiseTime <= 2.5f){
+            chestlocation.y -= keyRiseTime;
+        }else{
+            chestlocation.y -= 0;
+        }
+        keydest.x = chestlocation.x;
+        keydest.y = chestlocation.y;
+        DrawTexturePro(assets->texture[36], keysrc, keydest, origin, 0, WHITE);
+
+    }else {
+        keyRiseTime = 0.0f;
+        keyshdrise = false;
+        chestlocation.x = 0;
+        chestlocation.y = 0;
+    }
 
     for (int i = 0; i < blockcount; i++) {
         DrawTexturePro(assets->texture[12], sourceRect, blocksarray[i].rect, origin, 0, WHITE);
 
-        if (blocksarray[i].chestrec) {
+        if (blocksarray[i].chestrec){
             chesttexture = assets->texture[38];
             Rectangle chestdest = {blocksarray[i].rect.x, blocksarray[i].rect.y - (assets->texture[38].height / 8) - 68, 130, 100};
 
@@ -2601,12 +2677,19 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
                     blocksarray[i].cheststate = 1; 
                     blocksarray[i].chestanimationframe = 0;
                     blocksarray[i].chestanimationtimer = 0.0f;
+                    PlaySound(assets->sound[1]);
                 }
             }
 
 
-            if (blocksarray[i].cheststate == 1) {
+            if (blocksarray[i].cheststate == 1){
                 blocksarray[i].chestanimationtimer += GetFrameTime();
+                if (blocksarray[i].key){
+                    keyshdrise = true;
+                    PlaySound(assets->sound[2]);
+                    chestlocation = (Vector2){blocksarray[i].rect.x + 16, blocksarray[i].rect.y - 53};
+                }
+
                 if (blocksarray[i].chestanimationtimer >= 0.1f) { 
                     blocksarray[i].chestanimationframe++;
                     blocksarray[i].chestanimationtimer = 0.0f;
@@ -2817,7 +2900,7 @@ void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate*
                 break;
         }
     }
-    printf("%.2f, %.2f\n", mousepos.x, mousepos.y);
+    //printf("%.2f, %.2f\n", mousepos.x, mousepos.y);
 }
 
 void enemyanimations(struct Playerinfo* enemy, struct GameAssets* assets, bool coinenemy, bool enemywithkey, struct Playerinfo* player){ 
@@ -3285,7 +3368,7 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("Images/mountains.png"); //9
     assets.images[assets.imagecount++] = LoadImage("Images/mountain2.png");
     assets.images[assets.imagecount++] = LoadImage("Images/tree2.png");
-    assets.images[assets.imagecount++] = LoadImage("Images/shopbg.png"); //12
+    assets.images[assets.imagecount++] = LoadImage("Images/shopbgimg.png"); //12
     assets.images[assets.imagecount++] = LoadImage("Images/Tile1.png"); //13
     assets.images[assets.imagecount++] = LoadImage("Images/groundtiles.png");
     assets.images[assets.imagecount++] = LoadImage("enemies/arrow.png");
@@ -3323,7 +3406,9 @@ int main()
     assets.music[assets.musiccount++] = LoadMusicStream("Music/shop_music.mp3"); //2
     assets.music[assets.musiccount++] = LoadMusicStream("Music/gameover_music.mp3");
 
-    assets.sound[assets.soundcount++] = LoadSound("Music/Menu_Hover.mp3");
+    assets.sound[assets.soundcount++] = LoadSound("Sound/Menu_Hover_sound.mp3");
+    assets.sound[assets.soundcount++] = LoadSound("Sound/chest_sound.mp3");
+    assets.sound[assets.soundcount++] = LoadSound("Sound/foundkey_sound.mp3");
     //assets.sound[assets.soundcount++] = LoadSound("Music/Menu_Hover.mp3");
 
     ImageFormat(&assets.images[0], PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);

@@ -1,4 +1,4 @@
-PlayerPositionX=2894.70
+PlayerPositionX=1500.00
 PlayerPositionY=610.40
 Playeranimationstate=0
 PlayerIsJumping=0
@@ -10,45 +10,45 @@ PlayerHealth=61
 PlayerMaxHealth=100
 Playerdead=0
 Playerdeadtimer=0.00
-Playeralivetimer=26.73
+Playeralivetimer=13.32
 Playerattackdamage=0
 Playerdefense=5
 Playerjumpheight=0
-PlayerCurrency=1808
-Playeraccumulatedcurrency=52
+PlayerCurrency=2000
+Playeraccumulatedcurrency=26
 MusicVolume=0.55
 EnemyCount=3
-Enemy[0]PositionX=140.98
+Enemy[0]PositionX=700.33
 Enemy[0]PositionY=562.40
 Enemy[0]Health=75
 Enemy[0]Dead=0
 Enemy[0]isremoved=0
-Enemy[1]PositionX=1047.62
-Enemy[1]PositionY=50.00
+Enemy[1]PositionX=799.67
+Enemy[1]PositionY=562.40
 Enemy[1]Health=75
 Enemy[1]Dead=0
 Enemy[1]isremoved=0
-Enemy[2]PositionX=826.66
+Enemy[2]PositionX=1593.06
 Enemy[2]PositionY=562.40
 Enemy[2]Health=75
 Enemy[2]Dead=0
 Enemy[2]isremoved=0
-CameraTargetX=2944.70
+CameraTargetX=1550.00
 CameraTargetY=400.00
 CameraZoom=1.00
 Potion[1]price: 150
 Potion[1]bought: 0
 Potion[1]remaining: 5
 Potion[2]price: 80
-Potion[2]bought: 2
-Potion[2]remaining: 2
+Potion[2]bought: 0
+Potion[2]remaining: 5
 Potion[3]price: 100
 Potion[3]bought: 0
 Potion[3]remaining: 5
 Potion[4]price: 100
 Potion[4]bought: 0
 Potion[4]remaining: 5
-Potionused=1
+Potionused=0
 Playerinvenrow2[0]=0
 Playerinvenrow2[1]=0
 Playerinvenrow2[2]=0
@@ -60,11 +60,9 @@ Playerinvenrow3[3]=0
 Jumpboostactive=0
 Attackboostactive=0
 Defenseboostactive=0
-PotionCount=1
-PotionOrder[0]=1
-PotionBought[0]=2
+PotionCount=0
 Potioneffecttimer=0.00
-Potionactivetype=1
+Potionactivetype=-1
 Numberofkeys=0
 Doorkeyinserted=0
 Doorkey[1]inserted=0

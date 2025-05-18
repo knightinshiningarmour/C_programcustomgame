@@ -1,0 +1,9 @@
+Block[0] cheststate=0
+Block[0] chestanimationframe=0
+Block[0] keyclaimed=0
+Block[1] cheststate=0
+Block[1] chestanimationframe=0
+Block[1] keyclaimed=0
+Block[2] cheststate=0
+Block[2] chestanimationframe=0
+Block[2] keyclaimed=0

@@ -105,6 +105,7 @@ struct Playerinfo
     bool keyclaimed;
     bool platformwithgrass1;
     bool platformwithgrass2;
+    bool platformbarrier;
     int cheststate;
     int chestanimationframe;
     float chestanimationtimer;
@@ -510,10 +511,11 @@ void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, G
         enemyanimations(&enemies[i], assets, NULL, NULL, Playerdata);
     }
 
+    Vector2 enemypos[MAX_ENEMIES] = {(1850, -300), (1850, 0), (1200, 200)};
     //reset back to the wanted position
     for (int i = 0; i < MAX_ENEMIES; i++) {
         enemies[i] = (struct Playerinfo){
-            .Position = {400 + i * 700, 700 - 700*i},
+            .Position = enemypos[i],
             .width = 105,
             .height = 140,
             .attack = false,
@@ -2037,11 +2039,15 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
         return facedirection;
     }
 
-    if (IsKeyDown(KEY_LEFT_SHIFT) && !player->isJumping && !player->isfalling){ //ensure that the character will stop when hes holding shield
+    if (IsKeyDown(KEY_LEFT_SHIFT) && (player->onplatform || player->onground) ){ //ensure that the character will stop when hes holding shield
         player->onshield = true;
+        player->isfalling = false;
+        player->isrunning = false;
         player->animationstate = 5;
         player->speed = 0;
-    } else {
+        player->velocityY = 0;
+        return facedirection;
+    }else {
         player->onshield = false;
     }
 
@@ -2148,7 +2154,7 @@ int calculatemovementplayer(struct Playerinfo *player, int* maxplatform, struct 
             player->isrunning = false;
         }
     }
-    //printf("DEBUG for playerblock: onplatform=%d, onground=%d, isfalling=%d, animationstate=%d\n", player->onplatform, player->onground, player->isfalling, player->animationstate);
+    printf("DEBUG for playerblock: onplatform=%d, onground=%d, isfalling=%d, animationstate=%d, onshield=%d\n", player->onplatform, player->onground, player->isfalling, player->animationstate, player->onshield);
     if (player->direction.x > 0) {
          facedirection = 1;
     } else if (player->direction.x < 0) {
@@ -2379,15 +2385,13 @@ void iterateanimationplayer(Gamestate* currentGameState, struct GameAssets* asse
 }
 
 void saveBlockStates(const char* filename, int blockcount) {
-    int count = 0;
     FILE* file = fopen(filename, "w");
     if (!file) return;
     for (int i = 0; i < blockcount; i++) {
         if (blocksarray[i].chestrec){
-            fprintf(file, "Block[%d] cheststate=%d\n", count, blocksarray[i].cheststate);
-            fprintf(file, "Block[%d] chestanimationframe=%d\n", count, blocksarray[i].chestanimationframe);
-            fprintf(file, "Block[%d] keyclaimed=%d\n", count, blocksarray[i].keyclaimed);
-            count++; 
+            fprintf(file, "Block[%d] cheststate=%d\n", i, blocksarray[i].cheststate);
+            fprintf(file, "Block[%d] chestanimationframe=%d\n", i, blocksarray[i].chestanimationframe);
+            fprintf(file, "Block[%d] keyclaimed=%d\n", i, blocksarray[i].keyclaimed);
         }
 
     }
@@ -2699,6 +2703,7 @@ int loadmap(const char* filename, struct GameAssets* assets, struct Playerinfo* 
         free(blocksarray);
         blocksarray = NULL;
     }
+    player->hugeobscount = 0;
     
     FILE* Fileread = fopen(filename, "r");
     if (!Fileread) {
@@ -2721,7 +2726,8 @@ int loadmap(const char* filename, struct GameAssets* assets, struct Playerinfo* 
     }
 
     while (fgets(line, sizeof(line), Fileread)) {
-        for (int col = 0; line[col] != '\0' && line[col] != '\n'; col++){
+    for (int col = 0; line[col] != '\0' && line[col] != '\n'; col++){
+        memset(&blocksarray[i], 0, sizeof(struct Playerinfo));
             if (line[col] == '1') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
                 blocksarray[i].chestrec = false;
@@ -2758,7 +2764,7 @@ int loadmap(const char* filename, struct GameAssets* assets, struct Playerinfo* 
             }else if(line[col] == '5') {
                 blocksarray[i].portal = true;
                 blocksarray[i].Position.x = col* blockwidth;
-                blocksarray[i].Position.y = windheight - (128*0.7) + 10;
+                blocksarray[i].Position.y = row* blockvertspacing;
                 blocksarray[i].chestrec = false;
                 blocksarray[i].hugeobswithshop = false;
                 i++;
@@ -2786,6 +2792,10 @@ int loadmap(const char* filename, struct GameAssets* assets, struct Playerinfo* 
                 blocksarray[i].chestanimationframe = 0;
                 blocksarray[i].chestanimationtimer = 0.0f;
                 i++;
+            }else if (line[col] == '9') {
+                blocksarray[i].rect = (Rectangle){(col * blockwidth) + 2, (row-1) * blockvertspacing, blockwidth*1.5, (blockvertspacing*3)+blockheight};
+                blocksarray[i].platformbarrier = true;
+                i++;
             }
         }
         row++;
@@ -2809,7 +2819,7 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
     static bool keyshdrise = false;
     static Vector2 chestlocation = {0, 0};
 
-    lockeddoor(assets, player, currentGameState, &blockcount);
+    //lockeddoor(assets, player, currentGameState, &blockcount);
 
     if (keyshdrise && keyRiseTime < 4.0f) {
         keyRiseTime += GetFrameTime();
@@ -2830,17 +2840,17 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
     }
 
     for (int i = 0; i < blockcount; i++) {
-        if (blocksarray[i].hugeobswithshop){//12
+        if (blocksarray[i].hugeobswithshop){
             if (!player->entereddoor){ //map 1 blocks and shop position
                 DrawTexturePro(assets->texture[42], bigplatformsrc, blocksarray[i].rect, origin, 0, WHITE);
                 shop(assets, player, (int*)currentGameState, currentmusic, blocksarray[i].rect.x + 20, 350 - (128*0.7) - (assets->texture[24].height * 3) + 60, 3);
             }else{
-
+                return;
             }
         }else if (blocksarray[i].portal)
         {
             Rectangle lockeddoorsrc = {0, 40, 332, 332};
-            Rectangle lockeddoordest2 = {blocksarray[i].Position.x, blocksarray[i].Position.y, 240, 240};
+            Rectangle lockeddoordest2 = {blocksarray[i].Position.x, blocksarray[i].Position.y, 180, 180};
             DrawTexturePro(assets->texture[41], lockeddoorsrc, lockeddoordest2, origin, 0, WHITE);
             if (player->Position.x + player->width - 10 >= lockeddoordest2.x && player->Position.x <= lockeddoordest2.x + lockeddoordest2.width
             && player->Position.y >= lockeddoordest2.y && player->Position.y <= lockeddoordest2.y + lockeddoordest2.height){
@@ -2848,8 +2858,8 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
                 lockeddoorsrc.y += 668;
 
                 if (!player->entereddoor){
-                    DrawRectangleRec((Rectangle){lockeddoordest2.x - 70, lockeddoordest2.y - 120, lockeddoordest2.width + 150, 80}, (Color){255, 255, 255, 100});
-                    aligntextcentre(lockeddoordest2.x + lockeddoordest2.width/2 + 5, lockeddoordest2.y - 80, 25, "Press E to Enter Portal", ORANGE);
+                    DrawRectangleRec((Rectangle){lockeddoordest2.x + 180, lockeddoordest2.y, lockeddoordest2.width + 150, 80}, (Color){255, 255, 255, 100});
+                    aligntextcentre(lockeddoordest2.x + 200 + (270/2) + 5, lockeddoordest2.y + 40, 25, "Press E to Enter Portal", ORANGE);
                     
                      //player will always start at the first map
                     if (IsKeyPressed(KEY_E)){ 
@@ -2902,7 +2912,11 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
                 }
             }
         
-        }else{
+        }else if (blocksarray[i].platformbarrier){
+            Rectangle barriersrc = {0, 256, 50, 96};
+            DrawTexturePro(assets->texture[42], barriersrc, blocksarray[i].rect, origin, 0, WHITE);
+        }
+        else{
             if (!player->entereddoor){
                 DrawTexturePro(assets->texture[42], platformsrc, blocksarray[i].rect, origin, 0, WHITE);
             }else{

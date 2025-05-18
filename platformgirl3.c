@@ -73,6 +73,7 @@ struct Playerinfo
 {
     Rectangle rect;
     Rectangle rect2;
+    Rectangle hugeobs;
     Rectangle playerhitboxx;
     Rectangle playerhitboxyup;
     Rectangle playerhitboxydown;
@@ -97,6 +98,7 @@ struct Playerinfo
     bool enemywithkey[MAX_ENEMIES];
     bool deadenemyremoved;
     bool chestrec;
+    bool rarechestrec;
     bool hugeobswithshop;
     bool portal; //portal door to switch map
     bool key;
@@ -106,6 +108,7 @@ struct Playerinfo
     int cheststate;
     int chestanimationframe;
     float chestanimationtimer;
+    int hugeobscount;
 
     float playerdamage;
     int animationstate;
@@ -207,8 +210,8 @@ void aligntextcentre(int x, int y, int fontsize, const char* text, Color color);
 void rotatetextcentre(const char* text, Vector2 position, int fontSize, float rotation, Color color);
 void shop(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic, int destx, int desty, int scalefactor);
 void drawtrees(struct GameAssets* assets, int i, int destx, int desty, int scalefactor);
-void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Gamestate* currentGameState, int* currentmusic, float musicVolume, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera);
-void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera);
+void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Gamestate* currentGameState, int* currentmusic, float musicVolume, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera, int blockcount);
+void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera, int blockcount);
 void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, Gamestate* previousgamestate);
 void handleLoadSaves(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, bool *gamedataloaded, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], int* playerlastframedirection, int blockcount);
 void handleOptionsState(struct GameAssets* assets, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Gamestate* previousgamestate);
@@ -216,7 +219,7 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
     int enemyonblock[MAX_ENEMIES], struct Playerinfo enemies[MAX_ENEMIES], int* enemycount, int* currentmusic, bool* gamedataloaded,float* musicVolume, Gamestate* previousgamestate);
 void drawbuttonsplayingstate(struct GameAssets* assets, Camera2D* camera, Gamestate* currentGameState, struct Playerinfo* Playerdata);
 void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, Gamestate* previousgamestate, int* currentmusic, float* musicVolume);
-void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, Gamestate* previousgamestate, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera, bool* gamedataloaded);
+void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, Gamestate* previousgamestate, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera, bool* gamedataloaded, int blockcount);
 void playerenemyhpbar(struct Playerinfo* player, struct Playerinfo enemies[MAX_ENEMIES], struct GameAssets* assets, int enemycount, Camera2D* camera);
 void shopInteraction(struct Playerinfo* player, int* playerCurrency);
 void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* currentGameState, int* currentmusic, float* musicVolume);
@@ -227,7 +230,7 @@ void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, G
 void gameoverOverview(struct Playerinfo* Playerdata, struct GameAssets* assets, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], char action);
 void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* blockcount);
 void loadBlockStates(const char* filename, int blockcount);
-int loadmap(const char* filename, struct GameAssets* assets);
+int loadmap(const char* filename, struct GameAssets* assets, struct Playerinfo* player);
 
 void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, Camera2D* camera, struct GameAssets* assets, struct Playerinfo* Playerdata, int* blockcount, 
                         int* playerlastframedirection, int* playercurrentframe, int enemyonblock[MAX_ENEMIES], 
@@ -263,7 +266,7 @@ void handleGameState(Gamestate* currentGameState, Gamestate* previousgamestate, 
             handleshopstate(assets, Playerdata, (int*)currentGameState, currentmusic, &musicVolume);
             break;
         case PAUSE: 
-            handlePauseState(assets, Playerdata, currentGameState, previousgamestate, currentmusic, &musicVolume, enemycount, enemies, camera, &gamedataloaded);
+            handlePauseState(assets, Playerdata, currentGameState, previousgamestate, currentmusic, &musicVolume, enemycount, enemies, camera, &gamedataloaded, *blockcount);
             break;
         case GAMEOVER:
             handleGameOverState(assets, Playerdata, currentGameState, currentmusic, &musicVolume, camera, enemies, enemycount);
@@ -330,6 +333,7 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
     Playerdata->damagetaken = 0;
     Playerdata->keycount = 0;
     Playerdata->timelapsed = 0.0f;
+    Playerdata->hugeobscount = 0;
     assets->doorkeyinsertedcount = 0;
     assets->shopkeycount = 2;
     assets->shopkeyprice = 500;
@@ -569,10 +573,10 @@ void handleLoadSaves(struct GameAssets* assets, struct Playerinfo* Playerdata, G
             Playerdata->alivetimercompare = 0.0f;
             Playerdata->entereddoor = false;
             assets->newgame = true;
-
             //initialise the mapcheststates whenever the player starts a new game
             initMapsChestState(assets, Playerdata, "map1_state.txt");
             initMapsChestState(assets, Playerdata, "map2_state.txt");
+            blockcount = loadmap("map.txt", assets, Playerdata);
             *currentGameState = PLAYING; 
             *gamedataloaded = true;
         } 
@@ -589,10 +593,10 @@ void handleLoadSaves(struct GameAssets* assets, struct Playerinfo* Playerdata, G
         aligntextcentre(loadButton.x + loadButton.width / 2, loadButton.y + loadButton.height / 2, 30, "LOAD GAME", BLACK);
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             //initializeGameState(assets, Playerdata, currentGameState, currentmusic, musicVolume, playerlastframedirection);
-            loadgamedata(assets, Playerdata, currentGameState, currentmusic, musicVolume, enemycount, enemies, camera);
-            blockcount = loadmap("map.txt", assets);
+            blockcount = loadmap("map.txt", assets, Playerdata);
             loadBlockStates("map1_state.txt", blockcount);
             assets->newgame = false;
+            loadgamedata(assets, Playerdata, currentGameState, currentmusic, musicVolume, enemycount, enemies, camera, blockcount);
             printf("Alive timer: %f\n", Playerdata->alivetimer);
             printf("Playerposition: %f, %f\n", Playerdata->Position.x, Playerdata->Position.y);
             *currentGameState = PLAYING;
@@ -765,17 +769,16 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
         PlayMusicStream(assets->music[*currentmusic]);
         SetMusicVolume(assets->music[*currentmusic], *musicVolume + 0.2);
     }
+
     BeginMode2D(*camera);
     for (int j = 1; j < 5; j++){
-        if (j == 4){
-            drawbackground(assets, camera, j, 0.7);
-        }
-        else{
+        if (j != 4){
             drawbackground(assets, camera, j, 0.7);
         }
     }
 
     drawobstacles(*blockcount, assets, Playerdata, currentGameState, currentmusic, musicVolume);
+    drawbackground(assets, camera, 4, 0.7);
     //shop(assets, Playerdata, (int*)currentGameState, currentmusic, 15, 350 - (128*0.7) - (assets->texture[24].height * 3) + 60, 3);
     playerenemyhpbar(Playerdata, enemies, assets, *enemycount, camera);
     drawbuttonsplayingstate(assets, camera, currentGameState, Playerdata);   
@@ -1200,7 +1203,7 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
     }
 }
 
-void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, Gamestate* previousgamestate, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera, bool* gamedataloaded){
+void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, Gamestate* previousgamestate, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera, bool* gamedataloaded, int blockcount){
     Rectangle pausebgsrc = {0, 0, 120, 140};
     Rectangle pausebgdest = {600, 400, 800, windheight + 40};
     Vector2 pausebgorigin = {pausebgdest.width/2, pausebgdest.height/2};
@@ -1324,7 +1327,7 @@ void handlePauseState(struct GameAssets* assets, struct Playerinfo* Playerdata, 
             aligntextcentre(yesButton.x + yesButton.width / 2, yesButton.y + yesButton.height / 2, 30, "Yes", BLACK);
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) { //player has saved the game
                 confirmedsave = false;
-                savegamedata(Playerdata, assets, currentGameState, currentmusic, *musicVolume, *enemycount, enemies, camera);
+                savegamedata(Playerdata, assets, currentGameState, currentmusic, *musicVolume, *enemycount, enemies, camera, blockcount);
                 unsavedchanges = false;
                 showsavechangeswarning = false;
                 savetimer = 3.0f;
@@ -2409,7 +2412,7 @@ void loadBlockStates(const char* filename, int blockcount) {
     fclose(file);
 }
 
-void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Gamestate* currentGameState, int* currentmusic, float musicVolume, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera){
+void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Gamestate* currentGameState, int* currentmusic, float musicVolume, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera, int blockcount){
     FILE *file = fopen("savegame.txt", "w");
     if (file) {
         fprintf(file, "PlayerPositionX=%.2f\n", Playerdata->Position.x);
@@ -2470,6 +2473,14 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
             fprintf(file, "Doorkey[%d]inserted=%d\n", i + 1, assets->doorkeyinserted[i]);
             fprintf(file, "Doorkey[%d]circledrawn=%d\n", i + 1, assets->doorkeycircledrawn[i]);
         }
+
+        for (int i = 0; i<blockcount; i++){
+            if (blocksarray[i].chestrec){
+                fprintf(file, "chest[%d]state=%d\n", i, blocksarray[i].cheststate); // <-- ADD THIS
+                fprintf(file, "chest[%d]animationframe=%d\n", i, blocksarray[i].chestanimationframe);
+                fprintf(file, "chest[%d]keyclaimed=%d\n", i, blocksarray[i].keyclaimed);
+            }
+        }
         fprintf(file, "Shopkeycount=%d\n", assets->shopkeycount);
         fprintf(file, "Playersuccessfulparry=%d\n", Playerdata->successfulparry);
         fprintf(file, "Playerdamagetaken=%d\n", Playerdata->damagetaken);
@@ -2478,10 +2489,10 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
     }
 }
 
-void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera) {
+void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Gamestate* currentGameState, int* currentmusic, float* musicVolume, int* enemycount, struct Playerinfo enemies[MAX_ENEMIES], Camera2D* camera, int blockcount) {
     FILE *file = fopen("savegame.txt", "r");
     char line[100];
-    int enemyIndex, valueInt, potionnum, doorkeynum;
+    int enemyIndex, valueInt, potionnum, doorkeynum, cheststate, chestkeyclaimed, chestnum;
     float valueFloat;
     if (!file){
         printf("Error: No save file found. Starting a new game.\n");
@@ -2608,6 +2619,10 @@ void loadgamedata(struct GameAssets* assets, struct Playerinfo* Playerdata, Game
             assets->doorkeyinserted[doorkeynum - 1] = valueInt;
         }else if (sscanf(line, "Doorkey[%d]circledrawn=%d", &doorkeynum, &valueInt) == 2 && doorkeynum <= 4){
             assets->doorkeycircledrawn[doorkeynum - 1] = valueInt;
+        }else if (sscanf(line, "chest[%d]state=%d", &chestnum, &valueInt) == 2 && chestnum < blockcount){
+            blocksarray[chestnum].cheststate = valueInt;
+        }else if (sscanf(line, "chest[%d]keyclaimed=%d", &chestnum, &valueInt) == 2 && chestnum < blockcount){
+            blocksarray[chestnum].keyclaimed = valueInt;
         }else if(strstr(line, "Shopkeycount=")){
             sscanf(line, "Shopkeycount=%d", &assets->shopkeycount);
         }else if(strstr(line, "Playersuccessfulparry=")){
@@ -2679,7 +2694,7 @@ void gameoverOverview(struct Playerinfo* Playerdata, struct GameAssets* assets, 
     }
 }
 
-int loadmap(const char* filename, struct GameAssets* assets){
+int loadmap(const char* filename, struct GameAssets* assets, struct Playerinfo* player){
     if (blocksarray != NULL) {
         free(blocksarray);
         blocksarray = NULL;
@@ -2711,6 +2726,7 @@ int loadmap(const char* filename, struct GameAssets* assets){
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
                 blocksarray[i].chestrec = false;
                 blocksarray[i].hugeobswithshop = false;
+                blocksarray[i].portal = false;
                 i++;
             } else if (line[col] == '2') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
@@ -2720,11 +2736,11 @@ int loadmap(const char* filename, struct GameAssets* assets){
                 blocksarray[i].cheststate = 0;
                 blocksarray[i].chestanimationframe = 0;
                 blocksarray[i].chestanimationtimer = 0.0f;
+                blocksarray[i].portal = false;
                 i++;
             } else if (line[col] == '3') {
                 blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
                 blocksarray[i].chestrec = true;
-                blocksarray[i].hugeobswithshop = false;
                 blocksarray[i].key = true;
                 blocksarray[i].keyclaimed = false;
                 blocksarray[i].cheststate = 0;
@@ -2732,16 +2748,43 @@ int loadmap(const char* filename, struct GameAssets* assets){
                 blocksarray[i].chestanimationtimer = 0.0f;
                 i++;
             }else if (line[col] == '4') {
-                blocksarray[i].rect = (Rectangle){col * blockwidth - 20, windheight - (blockvertspacing*5) - (128*0.7) + 5, blockwidth * 5, (blockvertspacing*5)};
+                blocksarray[i].rect = (Rectangle){col * blockwidth - 20, windheight - (blockvertspacing*5) - (128*0.7) + 5, blockwidth * 5, (blockvertspacing*5) + 15};
+                blocksarray[player->hugeobscount].hugeobs = (Rectangle){col * blockwidth - 20, windheight - (blockvertspacing*5) - (128*0.7) + 5, blockwidth * 5, (blockvertspacing*5)};
                 blocksarray[i].chestrec = false;
                 blocksarray[i].hugeobswithshop = true;
+                blocksarray[i].portal = false;
                 i++;
+                player->hugeobscount++;
             }else if(line[col] == '5') {
                 blocksarray[i].portal = true;
                 blocksarray[i].Position.x = col* blockwidth;
-                blocksarray[i].Position.y = windheight - (blockheight*5) - (128*0.7) + 10;
+                blocksarray[i].Position.y = windheight - (128*0.7) + 10;
                 blocksarray[i].chestrec = false;
                 blocksarray[i].hugeobswithshop = false;
+                i++;
+            }else if (line[col] == '6') {
+                blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
+                blocksarray[i].chestrec = false;
+                blocksarray[i].hugeobswithshop = false;
+                blocksarray[i].platformwithgrass1 = true;
+                blocksarray[i].portal = false;
+                i++;
+            }else if (line[col] == '7') {
+                blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
+                blocksarray[i].chestrec = false;
+                blocksarray[i].hugeobswithshop = false;
+                blocksarray[i].platformwithgrass2 = true;
+                blocksarray[i].portal = false;
+                i++;
+            }else if (line[col] == '8') {
+                blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
+                blocksarray[i].chestrec = true;
+                blocksarray[i].rarechestrec = true;
+                blocksarray[i].key = true;
+                blocksarray[i].keyclaimed = false;
+                blocksarray[i].cheststate = 0;
+                blocksarray[i].chestanimationframe = 0;
+                blocksarray[i].chestanimationtimer = 0.0f;
                 i++;
             }
         }
@@ -2753,10 +2796,13 @@ int loadmap(const char* filename, struct GameAssets* assets){
 
 void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* currentmusic, float* musicvolume) {
     //Rectangle platformssourceRect = {240, 48, 63, 30};
+    Vector2 mousepos = GetMousePosition();
     Rectangle platformsrc = {0, 448, 96, 32};
     Rectangle bigplatformsrc = {0, 0, 96, 96};
     Rectangle keysrc = {0, 0, assets->texture[36].width, assets->texture[36].height};
     Rectangle keydest = {0, 0, 65, 45};
+    Rectangle coinsrc = {11, 11, 10, 10};
+    Rectangle coindest = {0, 0, 60, 50};
     Vector2 origin = {0, 0};
     Texture2D chesttexture;
     static float keyRiseTime = 0.0f;
@@ -2787,11 +2833,12 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
         if (blocksarray[i].hugeobswithshop){//12
             if (!player->entereddoor){ //map 1 blocks and shop position
                 DrawTexturePro(assets->texture[42], bigplatformsrc, blocksarray[i].rect, origin, 0, WHITE);
-                shop(assets, player, (int*)currentGameState, currentmusic, blocksarray[i].rect.x + 15, 350 - (128*0.7) - (assets->texture[24].height * 3) + 60, 3);
+                shop(assets, player, (int*)currentGameState, currentmusic, blocksarray[i].rect.x + 20, 350 - (128*0.7) - (assets->texture[24].height * 3) + 60, 3);
             }else{
 
             }
-        }else if (blocksarray[i].portal){
+        }else if (blocksarray[i].portal)
+        {
             Rectangle lockeddoorsrc = {0, 40, 332, 332};
             Rectangle lockeddoordest2 = {blocksarray[i].Position.x, blocksarray[i].Position.y, 240, 240};
             DrawTexturePro(assets->texture[41], lockeddoorsrc, lockeddoordest2, origin, 0, WHITE);
@@ -2808,7 +2855,7 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
                     if (IsKeyPressed(KEY_E)){ 
                         player->entereddoor = true;
                         saveBlockStates("map1_state.txt", blockcount);
-                        blockcount = loadmap("map2.txt", assets);
+                        blockcount = loadmap("map2.txt", assets, player);
 
                         //only load the block states on map2 if it was saved
                         if (!assets->newgame){ 
@@ -2836,7 +2883,7 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
                     if (IsKeyPressed(KEY_E)){
                         player->entereddoor = false;
                         saveBlockStates("map2_state.txt", blockcount);
-                        blockcount = loadmap("map.txt", assets);
+                        blockcount = loadmap("map.txt", assets, player);
                         loadBlockStates("map1_state.txt", blockcount);
 
                         StopMusicStream(assets->music[*currentmusic]);
@@ -2861,6 +2908,36 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
             }else{
 
             }
+        }
+
+        for (int i = 0; i<blockcount; i++){
+            for (int j = 0; j<player->hugeobscount; j++){ //loop through all the hugeobsrec
+                if (blocksarray[i].platformwithgrass1)
+                {
+                    if (CheckCollisionRecs(blocksarray[i].rect, blocksarray[j].hugeobs)){ //not drawing the tiles if overlapped
+                        drawtrees(assets, 1, blocksarray[i].rect.x + 10, blocksarray[i].rect.y, 3);
+                        drawtrees(assets, 1, blocksarray[i].rect.x + 40, blocksarray[i].rect.y, 3);
+                        drawtrees(assets, 1, blocksarray[i].rect.x + 70, blocksarray[i].rect.y, 3);
+                        drawtrees(assets, 1, blocksarray[i].rect.x -20, blocksarray[i].rect.y, 3);
+                    }else{
+                        DrawTexturePro(assets->texture[42], platformsrc, blocksarray[i].rect, origin, 0, WHITE);
+                        drawtrees(assets, 1, blocksarray[i].rect.x + 10, blocksarray[i].rect.y, 3);
+                        drawtrees(assets, 4, blocksarray[i].rect.x + 30, blocksarray[i].rect.y, 3);
+                        drawtrees(assets, 1, blocksarray[i].rect.x + 50, blocksarray[i].rect.y, 3);
+                    }                
+                }else if (blocksarray[i].platformwithgrass2)
+                {
+                    if (CheckCollisionRecs(blocksarray[i].rect, blocksarray[j].hugeobs)){ //not drawing the tiles if overlapped
+                        drawtrees(assets, 4, blocksarray[i].rect.x + 10, blocksarray[i].rect.y, 3);
+                    }else{
+                        DrawTexturePro(assets->texture[42], platformsrc, blocksarray[i].rect, origin, 0, WHITE);
+                        drawtrees(assets, 4, blocksarray[i].rect.x + 10, blocksarray[i].rect.y, 3);
+                        drawtrees(assets, 4, blocksarray[i].rect.x + 35, blocksarray[i].rect.y, 3);
+                        drawtrees(assets, 4, blocksarray[i].rect.x + 50, blocksarray[i].rect.y, 3);
+                    }                
+                }
+            }
+
         }
 
         if (blocksarray[i].chestrec){
@@ -2905,14 +2982,24 @@ void drawobstacles(int blockcount, struct GameAssets* assets, struct Playerinfo*
             }
 
             if (blocksarray[i].cheststate == 2) {
-                if (blocksarray[i].key && !blocksarray[i].keyclaimed) {
+                if (blocksarray[i].key && !blocksarray[i].keyclaimed){
                     addItemToInventory(player, 1);
                     blocksarray[i].keyclaimed = true;
+                    if (blocksarray[i].rarechestrec){
+                        player->currency += 300;
+                    }
+                }else if (blocksarray[i].key && blocksarray[i].keyclaimed){
+                    blocksarray[i].chestanimationframe = 9;
+                }else{
+                    blocksarray[i].chestanimationframe = 9;
                 }
             }
 
-            int frameindex = blocksarray[i].chestanimationframe % 5;
+            int frameindex = blocksarray[i].chestanimationframe % 5; 
             int rowindex = blocksarray[i].chestanimationframe / 5; 
+            if (blocksarray[i].rarechestrec){
+                rowindex = (blocksarray[i].chestanimationframe / 5) + 2; //blackchest is third and fourth row
+            }
             Rectangle chestsrc = {frameindex * (assets->texture[38].width / 5), rowindex * (assets->texture[38].height / 8), assets->texture[38].width / 5, assets->texture[38].height / 8 };
             DrawTexturePro(chesttexture, chestsrc, chestdest, origin, 0, WHITE);
         }
@@ -3697,7 +3784,7 @@ int main()
     int currentmusic, enemyonblock[MAX_ENEMIES]; 
     int blockcount;
 
-    blockcount = loadmap("map.txt", &assets);
+    blockcount = loadmap("map.txt", &assets, &Playerdata);
     int playerlastframedirection = 1;
     int playercurrentframe = 0;
     int enemycount = MAX_ENEMIES;

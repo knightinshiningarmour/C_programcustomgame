@@ -1,55 +1,55 @@
-PlayerPositionX=1770.05
-PlayerPositionY=-370.00
+PlayerPositionX=262.06
+PlayerPositionY=165.40
 Playeranimationstate=0
 PlayerIsJumping=0
 PlayerIsFalling=0
 PlayerVelocityY=0.00
 PlayerOnGround=0
 PlayerOnPlatform=1
-PlayerHealth=87
+PlayerHealth=91
 PlayerMaxHealth=100
 Playerdead=0
 Playerdeadtimer=0.00
-Playeralivetimer=102.13
+Playeralivetimer=20.69
 Playerattackdamage=0
 Playerdefense=5
 Playerjumpheight=0
-PlayerCurrency=2000
-Playeraccumulatedcurrency=190
-MusicVolume=0.00
+PlayerCurrency=2130
+Playeraccumulatedcurrency=140
+MusicVolume=0.50
 EnemyCount=3
-Enemy[0]PositionX=151.87
+Enemy[0]PositionX=2234.14
 Enemy[0]PositionY=562.40
 Enemy[0]Health=75
 Enemy[0]Dead=0
 Enemy[0]isremoved=0
-Enemy[1]PositionX=2078.94
+Enemy[1]PositionX=1392.16
 Enemy[1]PositionY=562.40
-Enemy[1]Health=75
-Enemy[1]Dead=0
-Enemy[1]isremoved=0
-Enemy[2]PositionX=2318.22
-Enemy[2]PositionY=-420.00
-Enemy[2]Health=75
-Enemy[2]Dead=0
-Enemy[2]isremoved=0
-CameraTargetX=1820.05
-CameraTargetY=-320.00
+Enemy[1]Health=0
+Enemy[1]Dead=1
+Enemy[1]isremoved=1
+Enemy[2]PositionX=1492.01
+Enemy[2]PositionY=562.40
+Enemy[2]Health=0
+Enemy[2]Dead=1
+Enemy[2]isremoved=1
+CameraTargetX=600.00
+CameraTargetY=215.40
 CameraZoom=1.00
 Potion[1]price: 150
-Potion[1]bought: 0
-Potion[1]remaining: 5
+Potion[1]bought: 1
+Potion[1]remaining: 3
 Potion[2]price: 80
-Potion[2]bought: 0
-Potion[2]remaining: 5
+Potion[2]bought: 1
+Potion[2]remaining: 4
 Potion[3]price: 100
-Potion[3]bought: 0
-Potion[3]remaining: 5
+Potion[3]bought: 1
+Potion[3]remaining: 4
 Potion[4]price: 100
 Potion[4]bought: 0
 Potion[4]remaining: 5
-Potionused=0
-Playerinvenrow2[0]=0
+Potionused=1
+Playerinvenrow2[0]=1
 Playerinvenrow2[1]=0
 Playerinvenrow2[2]=0
 Playerinvenrow2[3]=0
@@ -60,10 +60,16 @@ Playerinvenrow3[3]=0
 Jumpboostactive=0
 Attackboostactive=0
 Defenseboostactive=0
-PotionCount=0
+PotionCount=3
+PotionOrder[0]=0
+PotionBought[0]=1
+PotionOrder[1]=1
+PotionBought[1]=1
+PotionOrder[2]=2
+PotionBought[2]=1
 Potioneffecttimer=0.00
-Potionactivetype=-1
-Numberofkeys=0
+Potionactivetype=0
+Numberofkeys=3
 Doorkeyinserted=0
 Doorkey[1]inserted=0
 Doorkey[1]circledrawn=0
@@ -79,36 +85,39 @@ chest[0]keyclaimed=0
 chest[3]state=0
 chest[3]animationframe=0
 chest[3]keyclaimed=0
-chest[5]state=0
-chest[5]animationframe=0
-chest[5]keyclaimed=0
-chest[6]state=0
-chest[6]animationframe=0
-chest[6]keyclaimed=0
-chest[23]state=0
-chest[23]animationframe=0
-chest[23]keyclaimed=0
-chest[27]state=0
-chest[27]animationframe=0
-chest[27]keyclaimed=0
-chest[28]state=0
-chest[28]animationframe=0
-chest[28]keyclaimed=0
-chest[31]state=0
-chest[31]animationframe=0
-chest[31]keyclaimed=0
-chest[34]state=0
-chest[34]animationframe=0
-chest[34]keyclaimed=0
+chest[7]state=0
+chest[7]animationframe=0
+chest[7]keyclaimed=0
+chest[11]state=0
+chest[11]animationframe=0
+chest[11]keyclaimed=0
+chest[12]state=2
+chest[12]animationframe=9
+chest[12]keyclaimed=0
+chest[35]state=0
+chest[35]animationframe=0
+chest[35]keyclaimed=0
+chest[39]state=2
+chest[39]animationframe=9
+chest[39]keyclaimed=1
+chest[40]state=0
+chest[40]animationframe=0
+chest[40]keyclaimed=0
 chest[43]state=0
 chest[43]animationframe=0
 chest[43]keyclaimed=0
-chest[45]state=0
-chest[45]animationframe=0
-chest[45]keyclaimed=0
-chest[47]state=0
-chest[47]animationframe=0
-chest[47]keyclaimed=0
+chest[46]state=2
+chest[46]animationframe=9
+chest[46]keyclaimed=0
+chest[55]state=2
+chest[55]animationframe=9
+chest[55]keyclaimed=0
+chest[57]state=0
+chest[57]animationframe=0
+chest[57]keyclaimed=0
+chest[59]state=2
+chest[59]animationframe=9
+chest[59]keyclaimed=1
 Shopkeycount=2
 Playersuccessfulparry=0
-Playerdamagetaken=12
+Playerdamagetaken=36

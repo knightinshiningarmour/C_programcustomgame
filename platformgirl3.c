@@ -129,6 +129,7 @@ struct Playerinfo
     int potionbought[4];
     int potionorder[4];
     int inventoryrow2n3available[2][4];
+    bool hasboughtpotion[4];
     int row2n3invencount;
     int rowspacing;
     int potioncount;
@@ -350,6 +351,7 @@ void initializeGameState(struct GameAssets* assets, struct Playerinfo* Playerdat
         assets->doorkeycircledrawn[i] = 0;
         Playerdata->potionbought[i] = 0;
         Playerdata->potionorder[i] = 0;
+        Playerdata->hasboughtpotion[i] = false;
         Playerdata->row2n3invencount = 0;
         Playerdata->rowspacing = 0;
 
@@ -899,6 +901,7 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
         }
     }
 
+    //logics to detect the squares and draw the borders of inventory
     if (IsKeyPressed(KEY_LEFT) && hoverborderdest.x > 401){
         hoverborderdest.x -= 100;
     }else if (IsKeyPressed(KEY_RIGHT) && hoverborderdest.x < 700){
@@ -919,7 +922,7 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
 
     int y = 0;
     for (int i = 0; i < 12; i++) {
-        int x = i % 4;
+        int x = i % 4; //each row contains 4 columns
         if (i % 4 == 0 && i != 0) {
             y++;
         }
@@ -928,8 +931,8 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
         playerinvenboxes[i] = playerinvendest;
     
         if (i < player->potioncount){
-            int potiontype = player->potionorder[i];
-            if (player->potionbought[potiontype] > 0) {
+            int potiontype = player->potionorder[i]; //potionorder[i] reflects the 
+            if (player->potionbought[potiontype] > 0) { //only draws the potion is the potion is not 0
                 potionavailable[potiontype] = true;
     
                 Rectangle potionsrc = {potiontype * (assets->texture[29].width / 4), 0, assets->texture[29].width / 4,assets->texture[29].height / 2};
@@ -959,7 +962,7 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
         }
     }
     if (potionnum < player->potioncount) {
-        int type = player->potionorder[potionnum];
+        int type = player->potionorder[potionnum]; //reflects the potion that is being selected
         if (player->potionbought[type] != 0) {
             if (hoverborderdest.y < 270){
                 aligntextcentre(1000, 650, 30, potiondesc[type], BLUE);
@@ -1048,6 +1051,25 @@ void handleInventorystate(struct GameAssets* assets, struct Playerinfo* player, 
 
         if (canusepotion){
             player->potionbought[potiontype]--;
+
+            if (player->potionbought[potiontype] == 0){
+                int found = -1; //init as -1 as array starts from 0
+                for (int i = 0; i < player->potioncount; i++){
+                    if (player->potionorder[i] == potiontype){ //found the index of the potion in the potion bought order array
+                        found = i; 
+                        break;
+                    }
+                }
+                if (found != -1)
+                {
+                    for (int i = found; i < player->potioncount - 1; i++){ //starts from the array where the used potion is consumed 
+                        player->potionorder[i] = player->potionorder[i + 1]; //shifts all potion one slot to the left
+                    }
+                    player->potionorder[player->potioncount - 1] = 0;
+                    player->hasboughtpotion[potiontype] = false; //set back to false so that the next time the potion is bought it can be saved into the array again
+                    player->potioncount--;
+                }
+            }
             player->activepotiontype = potiontype;
             player->potionused++;
         }
@@ -1179,17 +1201,16 @@ void handleshopstate(struct GameAssets* assets, struct Playerinfo* player, int* 
             }
             if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && assets->potionleftinshop[i] != 0)
             {
-                //printf("Potion %d clicked!\n", i+1);
-                //can probably add a purchase confirmation page
                 if (player->currency >= assets->potionprice[i]){
-                    if (player->potionbought[i] == 0) {
-                        player->potionorder[player->potioncount++] = i;
+                    if (player->potionbought[i] == 0 && !player->hasboughtpotion[i]) {
+                        player->potionorder[player->potioncount++] = i; //save in the order the potions are bought
+                        player->hasboughtpotion[i] = true;
                     }
-                    player->potionbought[i]++;
+                    player->potionbought[i]++; //add to the potionbought for each type of potion
                     assets->potionleftinshop[i]--;
                     player->currency -= assets->potionprice[i];
                 }else{
-                    notenufmoney = true;
+                    notenufmoney = true; //the text saying not enough money will pop up
                 }
             }
         }
@@ -2437,6 +2458,7 @@ void savegamedata(struct Playerinfo* Playerdata, struct GameAssets* assets, Game
         fprintf(file, "Playerjumpheight=%d\n", Playerdata->jumpboost);
         fprintf(file, "PlayerCurrency=%d\n", Playerdata->currency);
         fprintf(file, "Playeraccumulatedcurrency=%d\n", Playerdata->accumulatedcurrency);
+
         fprintf(file, "MusicVolume=%.2f\n", musicVolume);
         fprintf(file, "EnemyCount=%d\n", enemycount);
         for (int i = 0; i < enemycount; i++) {

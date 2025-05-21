@@ -106,6 +106,10 @@ struct Playerinfo
     bool platformwithgrass1;
     bool platformwithgrass2;
     bool platformbarrier;
+    bool Rightnoticeboardplat;
+    bool Leftnoticeboardplat;
+    bool Upnoticeboard;
+    bool endingdoor;
     int cheststate;
     int chestanimationframe;
     float chestanimationtimer;
@@ -196,7 +200,7 @@ struct Playerinfo enemies[MAX_ENEMIES];
 Arrow arrows[MAX_ARROWS];
 
 //function prototypes
-void drawbackground(struct GameAssets* assets, Camera2D* camera, int x, float scalefactor, struct Playerinfo* player);
+void drawbackground(struct GameAssets* assets, Camera2D* camera, int x, float scalefactor, struct Playerinfo* player, Gamestate* currentgamestate);
 void drawobstacles(int* blockcount, struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* currentmusic, float* musicvolume);
 int calculatemovementplayer(struct Playerinfo* player, struct Playerinfo* blocksarray, int* maxplatform, struct GameAssets* assets, Gamestate currentgamestate);
 void updatecamera(Camera2D* camera, struct Playerinfo* player);
@@ -230,7 +234,7 @@ void drawInventory2n3row(struct GameAssets* assets, struct Playerinfo* player, R
 void addItemToInventory(struct Playerinfo* player, ItemType itemType);
 void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* currentmusic, float* musicVolume, Camera2D* camera, struct Playerinfo enemies[MAX_ENEMIES], int* enemycount);
 void gameoverOverview(struct Playerinfo* Playerdata, struct GameAssets* assets, int enemycount, struct Playerinfo enemies[MAX_ENEMIES], char action);
-void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* blockcount);
+void lockeddoor(int destx, int desty, struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* blockcount);
 void loadBlockStates(const char* filename, int blockcount);
 int loadmap(const char* filename, struct GameAssets* assets, struct Playerinfo* player);
 
@@ -491,7 +495,7 @@ void handleMenuState(struct GameAssets* assets, struct Playerinfo* Playerdata, G
     DrawTexturePro(assets->texture[20], playButtonsrc, playButtondest, (Vector2){0, 0}, 0, WHITE);
     DrawTexturePro(assets->texture[20], optionButtonsrc, optionsButtondest, (Vector2){0, 0}, 0, WHITE);
     DrawTexturePro(assets->texture[20], exitButtonsrc, exitButtondest, (Vector2){0, 0}, 0, WHITE);
-    drawbackground(assets, camera, 4, 0.7f, Playerdata);
+    drawbackground(assets, camera, 4, 0.7f, Playerdata, currentGameState);
     shop(assets, Playerdata, (int*)currentGameState, currentmusic, 840, 380, 3);
     drawtrees(assets, 3, 0, 310, 4);
     drawtrees(assets, 5, 60, 650, 3);
@@ -776,12 +780,12 @@ void handlePlayingState(struct GameAssets* assets, struct Playerinfo* Playerdata
     BeginMode2D(*camera);
     for (int j = 1; j < 5; j++){
         if (j != 4){
-            drawbackground(assets, camera, j, 0.7, Playerdata);
+            drawbackground(assets, camera, j, 0.7, Playerdata, currentGameState);
         }
     }
 
     drawobstacles(blockcount, assets, Playerdata, currentGameState, currentmusic, musicVolume);
-    drawbackground(assets, camera, 4, 0.7, Playerdata);
+    drawbackground(assets, camera, 4, 0.7, Playerdata, currentGameState);
     //shop(assets, Playerdata, (int*)currentGameState, currentmusic, 15, 350 - (128*0.7) - (assets->texture[24].height * 3) + 60, 3);
     playerenemyhpbar(Playerdata, enemies, assets, *enemycount, camera);
     drawbuttonsplayingstate(assets, camera, currentGameState, Playerdata);   
@@ -1455,7 +1459,7 @@ void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, G
     }
 
     for (int j = 1; j < 5; j++){
-        drawbackground(assets, camera, j, 0.8, player);
+        drawbackground(assets, camera, j, 0.8, player, currentGameState);
     }
 
     if (mousePos.x >= homebuttondest.x && mousePos.x <= homebuttondest.x + homebuttondest.width
@@ -1555,12 +1559,12 @@ void handleGameOverState(struct GameAssets* assets, struct Playerinfo* player, G
             break;
     }
 
-    if (IsKeyPressed(KEY_RIGHT)){
+    if (IsKeyPressed(KEY_RIGHT) || IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)){
         displayingtextindex++;
         if (displayingtextindex > 5){
             displayingtextindex = 0;
         }
-    }else if (IsKeyPressed(KEY_LEFT)){
+    }else if (IsKeyPressed(KEY_LEFT) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT)){
         displayingtextindex--;
         if (displayingtextindex < 0){
             displayingtextindex = 5;
@@ -1629,11 +1633,21 @@ void drawtrees(struct GameAssets* assets, int i, int destx, int desty, int scale
         Rectangle fallingleavesdest = {destx - leafOffset + 40, desty + leafOffset - (fallingleavessrc.height*scalefactor), fallingleavessrc.width*scalefactor, fallingleavessrc.height*scalefactor};
         Vector2 origin = {0, 0};
         DrawTexturePro(assets->texture[10], fallingleavessrc, fallingleavesdest, origin, 0, WHITE);
-    }else if (i == 6){
+    }else if (i == 6){ //noticeboard
         Rectangle noticeboardsrc = {228, 180, 22, 28};
         Rectangle noticeboarddest = {destx, desty - (noticeboardsrc.height*scalefactor), 30 + noticeboardsrc.width*scalefactor, noticeboardsrc.height*scalefactor};
         Vector2 origin = {0, 0};
         DrawTexturePro(assets->texture[10], noticeboardsrc, noticeboarddest, origin, 0, WHITE);
+    }else if (i == 7){
+        Rectangle rightnoticesrc = {260, 132, 25, 28};
+        Rectangle rightnoticedest = {destx, desty - (rightnoticesrc.height*scalefactor), 30 + rightnoticesrc.width*scalefactor, rightnoticesrc.height*scalefactor};
+        Vector2 origin = {0, 0};
+        DrawTexturePro(assets->texture[10], rightnoticesrc, rightnoticedest, origin, 0, WHITE);
+    }else if (i == 8){
+        Rectangle leftnoticesrc = {291, 132, 25, 28};
+        Rectangle leftnoticedest = {destx, desty - (leftnoticesrc.height*scalefactor), 30 + leftnoticesrc.width*scalefactor, leftnoticesrc.height*scalefactor};
+        Vector2 origin = {0, 0};
+        DrawTexturePro(assets->texture[10], leftnoticesrc, leftnoticedest, origin, 0, WHITE);
     }
 }
 
@@ -1831,17 +1845,20 @@ void updatecamera(Camera2D* camera, struct Playerinfo* player) {
     camera->offset = (Vector2){windwidth / 2, windheight / 2};
 }
 
-void drawbackground (struct GameAssets* assets, Camera2D* camera, int x, float scalefactor, struct Playerinfo* player){
+void drawbackground (struct GameAssets* assets, Camera2D* camera, int x, float scalefactor, struct Playerinfo* player, Gamestate* currentgamestate){
     switch (x){
         case 1:
-            if (!player->entereddoor) //if map1
+            if (!player->entereddoor || (*currentgamestate) == GAMEOVER) //if map1
             {
                 Rectangle skysrc;
                 Rectangle skydest;
                 for (int i = 0; i < (mapwidth/((assets->texture[6].width+200)*scalefactor)); i++){
                     if (i==0){ //only draw one sun
                         skysrc = (Rectangle){0, 0, assets->texture[6].width, assets->texture[6].height};
-                        skydest = (Rectangle){i * (skysrc.width*scalefactor), -800, (float)(assets->texture[6].width+200)*scalefactor, (float)skysrc.height * scalefactor + 270};  
+                        skydest = (Rectangle){i * (skysrc.width*scalefactor), -800, (float)(assets->texture[6].width+200)*scalefactor, (float)skysrc.height * scalefactor + 270}; 
+                        if (*currentgamestate == GAMEOVER){
+                            skydest.height = (skysrc.height*scalefactor) + 500;
+                        }
                     }else{
                         skysrc = (Rectangle){0, 0, 1300, assets->texture[6].height};
                         skydest = (Rectangle){i * (assets->texture[6].width*scalefactor), -800, (float)(assets->texture[6].width+200)*scalefactor, (float)skysrc.height * scalefactor + 270};
@@ -2880,6 +2897,22 @@ int loadmap(const char* filename, struct GameAssets* assets, struct Playerinfo* 
                 blocksarray[i].rect = (Rectangle){(col * blockwidth) + 2, (row-1) * blockvertspacing, blockwidth*1.5, (blockvertspacing*3)+blockheight};
                 blocksarray[i].platformbarrier = true;
                 i++;
+            }else if (line[col] == '>'){
+                blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
+                blocksarray[i].Rightnoticeboardplat = true;
+                i++;
+            }else if (line[col] == '<'){
+                blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
+                blocksarray[i].Leftnoticeboardplat = true;
+                i++;
+            }else if (line[col] == '^'){
+                blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
+                blocksarray[i].Upnoticeboard = true;
+                i++;
+            }else if (line[col] == '%'){
+                blocksarray[i].rect = (Rectangle){col * blockwidth, row * blockvertspacing, blockwidth, blockheight};
+                blocksarray[i].endingdoor = true;
+                i++;
             }
         }
         row++;
@@ -2899,6 +2932,8 @@ void drawobstacles(int* blockcount, struct GameAssets* assets, struct Playerinfo
     Rectangle coindest = {0, 0, 60, 50};
     Vector2 origin = {0, 0};
     Texture2D chesttexture;
+    Texture2D platformtexture = assets->texture[42];
+    Texture2D hugeobstexture = assets->texture[42];
     static float keyRiseTime = 0.0f;
     static bool keyshdrise = false;
     static Vector2 chestlocation = {0, 0};
@@ -2923,28 +2958,38 @@ void drawobstacles(int* blockcount, struct GameAssets* assets, struct Playerinfo
         chestlocation.y = 0;
     }
 
+
     for (int i = 0; i < *blockcount; i++) {
         if (blocksarray[i].hugeobswithshop){
-            if (!player->entereddoor){ //map 1 blocks and shop position
-                DrawTexturePro(assets->texture[42], bigplatformsrc, blocksarray[i].rect, origin, 0, WHITE);
-                shop(assets, player, (int*)currentGameState, currentmusic, blocksarray[i].rect.x + 20, 350 - (128*0.7) - (assets->texture[24].height * 3) + 60, 3);
-            }else{
-                return;
+            int shoppos = blocksarray[i].rect.x + 20;
+            if (player->entereddoor){
+                blocksarray[i].rect.width = 550;
+                shoppos = blocksarray[i].rect.x + 70;
             }
-        }else if (blocksarray[i].portal)
+            DrawTexturePro(hugeobstexture, bigplatformsrc, blocksarray[i].rect, origin, 0, WHITE);
+            shop(assets, player, (int*)currentGameState, currentmusic, shoppos, 350 - (128*0.7) - (assets->texture[24].height * 3) + 60, 3);
+        }
+        else if (blocksarray[i].portal)
         {
             Rectangle lockeddoorsrc = {0, 40, 332, 332};
             Rectangle lockeddoordest2 = {blocksarray[i].Position.x, blocksarray[i].Position.y, 180, 180};
-            DrawTexturePro(assets->texture[41], lockeddoorsrc, lockeddoordest2, origin, 0, WHITE);
             if (player->Position.x + player->width - 10 >= lockeddoordest2.x && player->Position.x <= lockeddoordest2.x + lockeddoordest2.width
             && player->Position.y >= lockeddoordest2.y && player->Position.y <= lockeddoordest2.y + lockeddoordest2.height){
                 
                 lockeddoorsrc.y += 668;
+            }
+            DrawTexturePro(assets->texture[41], lockeddoorsrc, lockeddoordest2, origin, 0, WHITE);
+            //printf("posx: %.2f, posy: %.2f\n", player->Position.x, player->Position.y);
 
+            if (player->Position.x + player->width - 10 >= lockeddoordest2.x && player->Position.x <= lockeddoordest2.x + lockeddoordest2.width
+            && player->Position.y >= lockeddoordest2.y && player->Position.y <= lockeddoordest2.y + lockeddoordest2.height){
+                
+                lockeddoorsrc.y += 668;
+                DrawRectangleRec((Rectangle){lockeddoordest2.x + 180, lockeddoordest2.y, lockeddoordest2.width + 150, 80}, (Color){255, 255, 255, 100});
+                aligntextcentre(lockeddoordest2.x + 200 + (270/2) + 5, lockeddoordest2.y + 40, 25, "Press E to Enter Portal", ORANGE);
+                
                 if (!player->entereddoor){
-                    DrawRectangleRec((Rectangle){lockeddoordest2.x + 180, lockeddoordest2.y, lockeddoordest2.width + 150, 80}, (Color){255, 255, 255, 100});
-                    aligntextcentre(lockeddoordest2.x + 200 + (270/2) + 5, lockeddoordest2.y + 40, 25, "Press E to Enter Portal", ORANGE);
-                    
+
                      //player will always start at the first map
                     if (IsKeyPressed(KEY_E)){ 
                         player->entereddoor = true;
@@ -2955,7 +3000,7 @@ void drawobstacles(int* blockcount, struct GameAssets* assets, struct Playerinfo
                         PlayMusicStream(assets->music[*currentmusic]);
                         SetMusicVolume(assets->music[*currentmusic], *musicvolume);
 
-                        /*for (int i = 0; i < 350; i++){
+                        /*for (int i = 0; i < 100; i++){
                             UpdateMusicStream(assets->music[*currentmusic]); //have to update musicstream inside loop to play
                             BeginDrawing();      
                             ClearBackground(BLACK);
@@ -2970,10 +3015,14 @@ void drawobstacles(int* blockcount, struct GameAssets* assets, struct Playerinfo
                         if (!assets->newgame){ 
                             loadBlockStates("map2_state.txt", *blockcount);
                         }
+                        //player->Position.x  = 152;
+                        //player->Position.y = -100;
+                        player->Position.x  = 2900;
+                        player->Position.y = -460;
                     }
                 }else{
-                    DrawRectangleRec((Rectangle){lockeddoordest2.x - 70, lockeddoordest2.y - 120, lockeddoordest2.width + 150, 80}, (Color){255, 255, 255, 100});
-                    aligntextcentre(lockeddoordest2.x + lockeddoordest2.width/2 + 5, lockeddoordest2.y - 80, 25, "Press E to Enter Portal", ORANGE);
+                    //DrawRectangleRec((Rectangle){lockeddoordest2.x - 70, lockeddoordest2.y - 120, lockeddoordest2.width + 150, 80}, (Color){255, 255, 255, 100});
+                    //aligntextcentre(lockeddoordest2.x + lockeddoordest2.width/2 + 5, lockeddoordest2.y - 80, 25, "Press E to Enter Portal", ORANGE);
                     
                     if (IsKeyPressed(KEY_E)){
                         player->entereddoor = false;
@@ -2993,6 +3042,8 @@ void drawobstacles(int* blockcount, struct GameAssets* assets, struct Playerinfo
                             DrawText("Loading...", windwidth/2-120, windheight/2, 60, WHITE);
                             EndDrawing();
                         }
+                         player->Position.x = 1270;
+                         player->Position.y = -280;
                     }
                 }
             }
@@ -3000,13 +3051,29 @@ void drawobstacles(int* blockcount, struct GameAssets* assets, struct Playerinfo
         }else if (blocksarray[i].platformbarrier){
             Rectangle barriersrc = {0, 256, 50, 96};
             DrawTexturePro(assets->texture[42], barriersrc, blocksarray[i].rect, origin, 0, WHITE);
+        }else if (blocksarray[i].Rightnoticeboardplat){
+            DrawTexturePro(platformtexture, platformsrc, blocksarray[i].rect, origin, 0, WHITE);
+            drawtrees(assets, 7, blocksarray[i].rect.x, blocksarray[i].rect.y, 3.0);
+            aligntextcentre(blocksarray[i].rect.x + 3 + blocksarray[i].rect.width/2, blocksarray[i].rect.y - (16*3.0) - 15, 25, "Right", WHITE);
+        }else if (blocksarray[i].Leftnoticeboardplat){
+            DrawTexturePro(platformtexture, platformsrc, blocksarray[i].rect, origin, 0, WHITE);
+            drawtrees(assets, 8, blocksarray[i].rect.x, blocksarray[i].rect.y, 3.0);
+            aligntextcentre(blocksarray[i].rect.x + 3 + blocksarray[i].rect.width/2, blocksarray[i].rect.y - (16*3.0) - 15, 25, "Left", WHITE);
+        }else if (blocksarray[i].Upnoticeboard){
+            DrawTexturePro(platformtexture, platformsrc, blocksarray[i].rect, origin, 0, WHITE);
+            drawtrees(assets, 7, blocksarray[i].rect.x, blocksarray[i].rect.y, 3.0);
+            aligntextcentre(blocksarray[i].rect.x + 3 + blocksarray[i].rect.width/2, blocksarray[i].rect.y - (16*3.0) - 15, 25, "Up", WHITE);
+        }else if (blocksarray[i].endingdoor){
+            lockeddoor(blocksarray[i].rect.x, blocksarray[i].rect.y, assets, player, currentGameState, blockcount);
         }
         else{
-            if (!player->entereddoor){
-                DrawTexturePro(assets->texture[42], platformsrc, blocksarray[i].rect, origin, 0, WHITE);
-            }else{
-
-            }
+            /*if (player->entereddoor){ //map2 platforms
+                //platformsrc = (Rectangle){346, 528, 596, 154};
+                //platformtexture = assets->texture[49];
+                platformsrc = (Rectangle){16, 192, 48, 16};
+                platformtexture = assets->texture[10];
+            }   */ 
+            DrawTexturePro(platformtexture, platformsrc, blocksarray[i].rect, origin, 0, WHITE);
         }
 
         for (int i = 0; i<*blockcount; i++){
@@ -3161,12 +3228,13 @@ void randomenemypos(int* maxplatform, int enemyonblock[MAX_ENEMIES]){
     }
 }
 
-void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* blockcount){
+void lockeddoor(int destx, int desty, struct GameAssets* assets, struct Playerinfo* player, Gamestate* currentGameState, int* blockcount){
     Vector2 mousepos = GetMousePosition();
-    Rectangle lockeddoorsrc = {0, 40, 332, 332};
-    Rectangle lockeddoordest = {2500, windheight-240-(128*0.7), 240, 240};
-    Rectangle lockeddoordest2 = {2500, windheight-240-(128*0.7), 240, 240};
+    Rectangle lockeddoorsrc = {0, 0, 332, 372};
+    Rectangle lockeddoordest = {destx - 20, desty - 45, 220, 225};
     Vector2 origin = {0, 0};
+
+    printf("%.2f, %.2f\n", mousepos.x, mousepos.y);
 
     static bool notenoughkeywarning = false;
     static bool keybeinginsertedwarning = false;
@@ -3176,9 +3244,11 @@ void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate*
 
     if (notenoughkeywarning){
         timelapsed += dt;
-        aligntextcentre(lockeddoordest.x + 400, lockeddoordest.y + 30, 40, "Not enough keys!", GREEN);
+        aligntextcentre(lockeddoordest.x + lockeddoordest.width + 220, lockeddoordest.y + 100, 40, "Not enough", GREEN);
+        aligntextcentre(lockeddoordest.x + lockeddoordest.width + 220, lockeddoordest.y + 150, 40, "Keys!", GREEN);
         if (timelapsed > 3.0f){
             notenoughkeywarning = false;
+            timelapsed = 0.0f;
         }
     }
 
@@ -3202,15 +3272,17 @@ void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate*
 
     if (player->Position.x + player->width - 10 >= lockeddoordest.x && player->Position.x <= lockeddoordest.x + lockeddoordest.width
         && player->Position.y >= lockeddoordest.y && player->Position.y <= lockeddoordest.y + lockeddoordest.height){
-            lockeddoorsrc.y += 668;
+            lockeddoorsrc.y += 654;
             if (!player->won){
-                DrawRectangleRec((Rectangle){lockeddoordest.x - 70, lockeddoordest.y - 120, lockeddoordest.width + 150, 80}, (Color){255, 255, 255, 100});
-                aligntextcentre(lockeddoordest.x + lockeddoordest.width/2 + 5, lockeddoordest.y - 80, 25, "Press E to Insert Key", ORANGE);
+                Rectangle insertkeyrec = {lockeddoordest.x - 370, lockeddoordest.y  + 50, lockeddoordest.width + 150, 80};
+                DrawRectangleRec(insertkeyrec, (Color){255, 255, 255, 100});
+                aligntextcentre(insertkeyrec.x + insertkeyrec.width/2 + 5, insertkeyrec.y + insertkeyrec.height/2, 25, "Press E to Insert Key", ORANGE);
             }else{
-                DrawRectangleRec((Rectangle){lockeddoordest.x - 70, lockeddoordest.y - 140, lockeddoordest.width + 150, 100}, (Color){255, 255, 255, 100});
-                aligntextcentre(lockeddoordest.x + lockeddoordest.width/2 + 5, lockeddoordest.y - 120, 25, "You have unlocked the door!", ORANGE);
-                aligntextcentre(lockeddoordest.x + lockeddoordest.width/2 + 5, lockeddoordest.y - 85, 25, "Feel free to continue explore", ORANGE);
-                aligntextcentre(lockeddoordest.x + lockeddoordest.width/2 + 5, lockeddoordest.y - 50, 25, "or enter when you are ready!", ORANGE);
+                Rectangle completedgametextrec = {lockeddoordest.x - 450, lockeddoordest.y + 40, lockeddoordest.width + 230, 100};
+                DrawRectangleRec(completedgametextrec, (Color){255, 255, 255, 100});
+                aligntextcentre(completedgametextrec.x + completedgametextrec.width/2 + 5, completedgametextrec.y + 20, 25, "You have unlocked the door!", ORANGE);
+                aligntextcentre(completedgametextrec.x + completedgametextrec.width/2 + 5, completedgametextrec.y + 50, 25, "Feel free to continue explore", ORANGE);
+                aligntextcentre(completedgametextrec.x + completedgametextrec.width/2 + 5, completedgametextrec.y + 80, 25, "or enter when you are ready!", ORANGE);
             }
         if (IsKeyPressed(KEY_E)){
             if (!keybeinginserted && !player->won){
@@ -3246,7 +3318,7 @@ void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate*
             }
         }*/
 
-    DrawTexturePro(assets->texture[41], lockeddoorsrc, lockeddoordest, origin, 0, WHITE);
+    DrawTexturePro(assets->texture[48], lockeddoorsrc, lockeddoordest, origin, 0, WHITE);
     //DrawTexturePro(assets->texture[41], lockeddoorsrc, lockeddoordest2, origin, 0, WHITE);
 
     for (int i = 0; i < 4; i++){
@@ -3254,7 +3326,7 @@ void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate*
             case 0:
                 if (assets->doorkeyinserted[i]){
                     for (int j = 0; j<assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1]; j++){
-                        DrawCircle(lockeddoordest.x + 61 + (22*j), 579, 7, BLUE);
+                        DrawCircle(lockeddoordest.x + 56 + (20*j), lockeddoordest.y + 114, 7, BLUE);
                     }
                 }
                 break;
@@ -3262,7 +3334,7 @@ void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate*
             case 1:
                 if (assets->doorkeyinserted[i]){
                     for (int j = 0; j<assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1]; j++){
-                        DrawCircle(lockeddoordest.x + lockeddoordest.width - 60 - (22*j), 579, 7, BLUE);
+                        DrawCircle(lockeddoordest.x + lockeddoordest.width - 55 - (20*j), lockeddoordest.y + 114, 7, BLUE);
                     }
                 }
                 break;
@@ -3270,7 +3342,7 @@ void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate*
             case 2:
                 if (assets->doorkeyinserted[i]){
                     for (int j = 0; j<assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1]; j++){
-                        DrawCircle(lockeddoordest.x + 61 + (22*j), 651, 7, BLUE);
+                        DrawCircle(lockeddoordest.x + 56 + (20*j), lockeddoordest.y + 176, 7, BLUE);
                     }
                 }
                 break;
@@ -3278,7 +3350,7 @@ void lockeddoor(struct GameAssets* assets, struct Playerinfo* player, Gamestate*
             case 3:
                 if (assets->doorkeyinserted[i]){
                     for (int j = 0; j<assets->doorkeycircledrawn[assets->doorkeyinsertedcount - 1]; j++){
-                        DrawCircle(lockeddoordest.x + lockeddoordest.width - 60 - (22*j), 651, 7, BLUE);
+                        DrawCircle(lockeddoordest.x + lockeddoordest.width - 55 - (20*j), lockeddoordest.y + 176, 7, BLUE);
                     }
                 }
                 break;
@@ -3796,14 +3868,14 @@ int main()
     assets.images[assets.imagecount++] = LoadImage("Images/Chests.png");
     assets.images[assets.imagecount++] = LoadImage("Images/Chestsbordered.png"); //39
     assets.images[assets.imagecount++] = LoadImage("Images/Dying_KG_1.png");
-    assets.images[assets.imagecount++] = LoadImage("Images/door.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/portal.png");
     assets.images[assets.imagecount++] = LoadImage("Images/tileset2.png");
     assets.images[assets.imagecount++] = LoadImage("Images/lamp.png"); //43
     assets.images[assets.imagecount++] = LoadImage("Images/map2bg1.png");
     assets.images[assets.imagecount++] = LoadImage("Images/map2bg2.png");
     assets.images[assets.imagecount++] = LoadImage("Images/map2bg3.png");
     assets.images[assets.imagecount++] = LoadImage("Images/map2bg4.png"); //47
-    assets.images[assets.imagecount++] = LoadImage("Images/map2tiles.png");
+    assets.images[assets.imagecount++] = LoadImage("Images/endgamedoor.png");
 
     assets.music[assets.musiccount++] = LoadMusicStream("Music/map1_music.mp3");
     assets.music[assets.musiccount++] = LoadMusicStream("Music/menu_music.mp3");

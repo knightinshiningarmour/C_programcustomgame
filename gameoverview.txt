@@ -1,7 +1,7 @@
-Playerlongestalivetime=15.50
-Playeralivetimer=15.50
-Playeraccumulatedcurrency=72
+Playerlongestalivetime=30.25
+Playeralivetimer=30.25
+Playeraccumulatedcurrency=60
 Playerpotionused=0
-Enemykilled=1
-Playerdamagetaken=24
+Enemykilled=0
+Playerdamagetaken=96
 Playersuccessfulparry=0

@@ -1,0 +1,10 @@
+Enemies[0]PositionX=370.00
+Enemies[0]PositionY=-50.00
+Enemy[1]PositionX=1400.00
+Enemy[1]PositionY=-400.00
+Enemy[2]PositionX=2650.30
+Enemy[2]PositionY=-500.00
+Enemy[3]PositionX=2250.00
+Enemy[3]PositionY=500.00
+Enemy[4]PositionX=1200.00
+Enemy[4]PositionY=-700.00

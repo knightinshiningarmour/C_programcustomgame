@@ -283,3 +283,7 @@ Enemy[1] PositionX = 1200.000000
 Enemy[1] PositionY = -300.000000
 Enemy[2] PositionX = 800.000000
 Enemy[2] PositionY = 400.000000
+Enemy[3] PositionX = 0.000000
+Enemy[3] PositionY = 0.000000
+Enemy[4] PositionX = 4437835933283309247044517888.000000
+Enemy[4] PositionY = 812257136913416192.000000
